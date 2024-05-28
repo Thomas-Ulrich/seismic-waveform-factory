@@ -1,0 +1,309 @@
+#!/usr/bin/env python3
+from obspy import UTCDateTime
+from obspy.geodetics import locations2degrees
+from obspy.geodetics.base import gps2dist_azimuth
+import argparse
+import configparser
+import matplotlib.pyplot as plt
+import os
+from retrieve_waveforms import retrieve_waveforms
+from waveform_figure_generator import WaveformFigureGenerator
+import sys
+from waveform_figure_utils import (
+    compile_list_inventories,
+    reorder_station_using_azimuth,
+    estimate_travel_time,
+    merge_gof_dfs,
+)
+from itertools import cycle
+import pickle
+
+parser = argparse.ArgumentParser(
+    description=(
+        "generate synthetics with instaseis or axitra given sources and stations"
+    )
+)
+parser.add_argument("config_file", help="config file describing event and stations")
+args = parser.parse_args()
+
+
+config = configparser.ConfigParser()
+assert os.path.isfile(args.config_file), f"{args.config_file} not found"
+config.read(args.config_file)
+
+setup_name = config.get("GENERAL", "setup_name")
+ext = config.get("GENERAL", "figure_extension")
+font_size = config.get("GENERAL", "font_size")
+
+source_files = config.get("GENERAL", "source_files").split(",")
+client_name = config.get("GENERAL", "client")
+onset = config.get("GENERAL", "onset")
+t1 = UTCDateTime(onset)
+kind_vd = config.get("GENERAL", "kind")
+
+software = config.get("GENERAL", "software").split(",")
+n_software = len(software)
+if "instaseis" in software:
+    from instaseis_routines import generate_synthetics_instaseis
+
+    db_name = config.get("GENERAL", "db")
+    prefix = f"plots/{setup_name}_{kind_vd}_instaseis"
+
+if ("axitra" in software) or ("pyprop8" in software):
+    fmax = config.getfloat("GENERAL", "axitra_pyprop8_fmax")
+    duration = config.getfloat("GENERAL", "axitra_pyprop8_duration")
+    velocity_model_fname = config.get("GENERAL", "axitra_pyprop8_velocity_model")
+    if "axitra" in software:
+        path2axitra = config.get("GENERAL", "axitra_path")
+    prefix = f"plots/{setup_name}_{kind_vd}_{fmax}Hz_{duration}s"
+
+hypo_lon = config.getfloat("GENERAL", "hypo_lon")
+hypo_lat = config.getfloat("GENERAL", "hypo_lat")
+hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
+projection = config.get("GENERAL", "proj", fallback=None)
+station_codes_list = config.get("GENERAL", "stations")
+station_codes = [v.strip() for v in station_codes_list.split(",")]
+colors = config.get("GENERAL", "line_colors").split(",")
+ncolors = len(colors)
+if ncolors < len(source_files):
+    print("enhancing line_colors as not enough colors specified")
+    cycol = cycle(colors)
+    for i in range(ncolors, len(source_files)):
+        colors.append(next(cycol))
+
+path_observations = config.get("GENERAL", "path_observations")
+kind_misfit = config.get("GENERAL", "Misfit", fallback="rRMS")
+
+plt.rcParams.update({"font.size": font_size})
+
+os.makedirs(path_observations, exist_ok=True)
+
+Pwave_tmin = -config.getfloat("P_WAVE", "t_before")
+Pwave_tmax = config.getfloat("P_WAVE", "t_after")
+Pwave_filter_fmin = 1.0 / config.getfloat("P_WAVE", "filter_tmax")
+Pwave_filter_fmax = 1.0 / config.getfloat("P_WAVE", "filter_tmin")
+Pwave_enabled = config.getboolean("P_WAVE", "enabled")
+Pwave_ncol_per_component = config.getint("P_WAVE", "ncol_per_component")
+
+
+SHwave_tmin = -config.getfloat("SH_WAVE", "t_before")
+SHwave_tmax = config.getfloat("SH_WAVE", "t_after")
+SHwave_filter_fmin = 1.0 / config.getfloat("SH_WAVE", "filter_tmax")
+SHwave_filter_fmax = 1.0 / config.getfloat("SH_WAVE", "filter_tmin")
+SHwave_enabled = config.getboolean("SH_WAVE", "enabled")
+SHwave_ncol_per_component = config.getint("SH_WAVE", "ncol_per_component")
+
+
+surface_waves_filter_fmin = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmax")
+surface_waves_filter_fmax = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmin")
+surface_waves_tmax = config.getfloat("SURFACE_WAVES", "tmax", fallback=None)
+surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
+surface_waves_ncol_per_component = config.getint("SURFACE_WAVES", "ncol_per_component")
+surface_waves_components = config.get("SURFACE_WAVES", "components").split(",")
+
+
+station_codes_name = "_".join(station_codes)
+fn_list_inventory = f"observations/{station_codes_name}.pkl"
+print(f"checking if list_inventory stored in {fn_list_inventory}")
+if os.path.exists(fn_list_inventory):
+    list_inventory = pickle.load(open(fn_list_inventory, "rb"))
+else:
+    list_inventory = compile_list_inventories(client_name, station_codes, t1)
+    with open(fn_list_inventory, "wb") as f:
+        pickle.dump(list_inventory, f, pickle.HIGHEST_PROTOCOL)
+
+print([f"{inv[0][0].code}" for inv in list_inventory])
+
+list_inventory = reorder_station_using_azimuth(list_inventory, hypo_lon, hypo_lat)
+
+nstations = len(list_inventory)
+n_kinematic_models = len(source_files)
+
+Pwave = WaveformFigureGenerator(
+    "P",
+    Pwave_tmin,
+    Pwave_tmax,
+    Pwave_filter_fmin,
+    Pwave_filter_fmax,
+    Pwave_enabled,
+    Pwave_ncol_per_component,
+    nstations,
+    ["Z"],
+    n_software * n_kinematic_models,
+    kind_misfit,
+    colors,
+)
+SHwave = WaveformFigureGenerator(
+    "SH",
+    SHwave_tmin,
+    SHwave_tmax,
+    SHwave_filter_fmin,
+    SHwave_filter_fmax,
+    SHwave_enabled,
+    SHwave_ncol_per_component,
+    nstations,
+    ["T"],
+    n_software * n_kinematic_models,
+    kind_misfit,
+    colors,
+)
+surface_waves = WaveformFigureGenerator(
+    "surface_waves",
+    0.0,
+    surface_waves_tmax,
+    surface_waves_filter_fmin,
+    surface_waves_filter_fmax,
+    surface_waves_enabled,
+    surface_waves_ncol_per_component,
+    nstations,
+    surface_waves_components,
+    n_software * n_kinematic_models,
+    kind_misfit,
+    colors,
+)
+
+
+components = ["E", "N", "Z"]
+
+if Pwave_enabled and not (SHwave_enabled or surface_waves_enabled):
+    # we do not need to compute E and N if Pwave only
+    components = ["Z"]
+
+gofall = [0 for i in range(len(source_files))]
+
+list_synthetics_all = []
+
+if "axitra" in software:
+    sys.path.append(path2axitra)
+    from axitra_routines import generate_synthetics_axitra
+
+    list_synthetics = generate_synthetics_axitra(
+        source_files,
+        list_inventory,
+        t1,
+        kind_vd,
+        fmax,
+        duration,
+        velocity_model_fname,
+        path2axitra,
+    )
+    list_synthetics_all += list_synthetics
+    t_obs_before, t_obs_after = 100, 400
+    if not surface_waves_tmax:
+        surface_waves.tmax = duration
+
+if "pyprop8" in software:
+    from pyprop8_routines import generate_synthetics_pyprop8
+
+    list_synthetics = generate_synthetics_pyprop8(
+        source_files,
+        list_inventory,
+        t1,
+        kind_vd,
+        fmax,
+        duration,
+        velocity_model_fname,
+    )
+    list_synthetics_all += list_synthetics
+    t_obs_before, t_obs_after = 100, 400
+    if not surface_waves_tmax:
+        surface_waves.tmax = duration
+
+if "instaseis" in software:
+    list_synthetics = generate_synthetics_instaseis(
+        db_name,
+        source_files,
+        list_inventory,
+        t1,
+        kind_vd,
+        components,
+        path_observations,
+        projection,
+    )
+    list_synthetics_all += list_synthetics
+
+    duration_synthetics = (
+        list_synthetics[0][0].stats.endtime - list_synthetics[0][0].stats.starttime
+    )
+
+    t_obs_before, t_obs_after = 1000, duration_synthetics + 1000
+    if not surface_waves_tmax:
+        surface_waves.tmax = duration_synthetics
+
+
+for ins, inv in enumerate(list_inventory):
+    sta = inv[0][0]
+    network = inv[0].code
+    station = sta.code
+    starttime = t1 - t_obs_before
+    endtime = t1 + t_obs_after
+    network_station = {inv[0].code: [sta.code]}
+    retrieved_waveforms = retrieve_waveforms(
+        network_station, client_name, kind_vd, path_observations, starttime, endtime
+    )
+    st_obs0 = retrieved_waveforms[f"{network}.{station}"]
+    network = st_obs0[0].stats.network
+
+    lst = []
+    for st_syn in list_synthetics_all:
+        lst += [st_syn.select(station=station)]
+    dist = locations2degrees(
+        lat1=sta.latitude, long1=sta.longitude, lat2=hypo_lat, long2=hypo_lon
+    )
+    azimuth = gps2dist_azimuth(
+        lat1=sta.latitude, lon1=sta.longitude, lat2=hypo_lat, lon2=hypo_lon
+    )[2]
+    for st in [*lst, st_obs0]:
+        for tr in st:
+            tr.stats.back_azimuth = azimuth
+            tr.stats.distance = dist
+
+    if Pwave.enabled:
+        tP = estimate_travel_time(hypo_depth_in_km, dist, station, "P")
+        Pwave.add_plot_station(st_obs0, lst, t1 + tP, ins)
+
+    if SHwave.enabled:
+        tS = estimate_travel_time(hypo_depth_in_km, dist, station, "S")
+        SHwave.add_plot_station(st_obs0, lst, t1 + tS, ins)
+
+    if surface_waves.enabled:
+        surface_waves.add_plot_station(st_obs0, lst, t1, ins)
+
+print("goodness of fit (gof) per station:")
+df_merged = merge_gof_dfs(Pwave, SHwave, surface_waves)
+
+# Sort the column names alphabetically starting from "surface_waves_E0"
+sorted_columns = sorted(df_merged.columns[df_merged.columns.get_loc("azimuth") + 1 :])
+# Define the desired column order
+desired_columns = ["station", "distance", "azimuth"] + sorted_columns
+
+# Reorder the columns
+df_merged = df_merged.reindex(columns=desired_columns)
+print(df_merged)
+
+fname = "gof_per_station.pkl"
+df_merged.to_pickle(fname)
+print(f"done writing {fname}")
+
+df_merged.drop(columns=["station", "distance", "azimuth"], inplace=True)
+print("station average gof:")
+df_station_average = df_merged.mean(axis=0)
+print(df_station_average)
+fname = "gof_average.pkl"
+df_station_average.to_pickle(fname)
+print(f"done writing {fname}")
+
+if not os.path.exists("plots"):
+    os.makedirs("plots")
+
+if Pwave.enabled:
+    fname_P = f"{prefix}_Pwave.{ext}"
+    Pwave.finalize_and_save_fig(fname_P)
+
+if SHwave.enabled:
+    fname_SH = f"{prefix}_SHwave.{ext}"
+    SHwave.finalize_and_save_fig(fname_SH)
+
+if surface_waves.enabled:
+    fname_surface_waves = f"{prefix}_surface_waves_signal.{ext}"
+    surface_waves.finalize_and_save_fig(fname_surface_waves)

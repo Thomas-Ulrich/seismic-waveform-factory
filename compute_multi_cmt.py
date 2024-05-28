@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+import numpy as np
+import cmt
+import argparse
+from faultoutput import FaultOutput
+import os
+
+parser = argparse.ArgumentParser(
+    description="compute multiple point source representation from SeisSol fault output"
+)
+subparsers = parser.add_subparsers(dest="command")
+
+subparsers.required = True
+
+spatial = subparsers.add_parser(
+    "spatial", help="divide fault along horizontal vector Vh and Uz"
+)
+
+spatial.add_argument(
+    "--vH",
+    nargs=2,
+    metavar=("vhx", "vhy"),
+    help="vector defining the slicing direction in the horizontal plane",
+    type=float,
+)
+
+temporal = subparsers.add_parser("temporal", help="divide fault with time and Uz")
+
+temporal.add_argument(
+    "--time_range",
+    nargs=2,
+    metavar=("minT", "maxT"),
+    help="time range for time slices",
+    type=float,
+)
+temporal.add_argument(
+    "--time_sub_events",
+    nargs="+",
+    help="when temporal, define the exact times (relative to minT, see time_range) separating events (NH is then ignored)",
+    type=float,
+)
+
+
+for sp in [spatial, temporal]:
+    sp.add_argument("filename", help="fault output filename (xdmf)")
+    sp.add_argument(
+        "muDescription",
+        help="0: constant, 1: 1D velocity, 2: 3D netcdf, 3: Sumatra specific",
+        type=int,
+    )
+
+    sp.add_argument(
+        "muValue",
+        help="value of rigidity (mu) of file describing mu \
+(1: 2 columns ASCII (z, mu), 2: 3D netcdf)",
+    )
+    # This can be pertinent if we have a high SR file output
+    # and a coarsely sampled file with the rest of the output (currently it should be an extract)
+    # that is based on the same simulation
+    sp.add_argument(
+        "--STFfromSR",
+        nargs=1,
+        metavar=("xdmf SR File"),
+        help="use SR to compute Source time function (high sampling rate required)",
+    )
+
+    sp.add_argument(
+        "--proj",
+        nargs=1,
+        metavar=("projname"),
+        help="transform to the coordinate reference system WGS 84 (lat, lon) from projname",
+    )
+
+    sp.add_argument(
+        "--DH",
+        nargs=1,
+        default=([20]),
+        help="max horizontal distance between point sources, in km",
+        type=float,
+    )
+
+    sp.add_argument(
+        "--NZ",
+        nargs=1,
+        metavar=("nz"),
+        default=([2]),
+        help="number of point sources along z",
+        type=int,
+    )
+
+    sp.add_argument(
+        "--slip_threshold",
+        nargs=1,
+        metavar=("slip_threshold"),
+        default=([0.1]),
+        help="slip threshold used for excluding low slip areas when slicing the fault",
+        type=float,
+    )
+
+    sp.add_argument(
+        "--refVector",
+        nargs=3,
+        metavar=("rvx", "rvy", "rvz"),
+        default=([-1e-5, 0, -1]),
+        help="refVector as defined in SeisSol (for computing strike and dip)",
+        type=float,
+    )
+
+    sp.add_argument(
+        "--ndt", nargs=1, metavar=("ndt"), help="use a subset of time frames", type=int
+    )
+
+    sp.add_argument(
+        "--invertSld",
+        dest="invertSld",
+        action="store_true",
+        help="invert Sld (if the normal is (consistently!) wrongly defined in SeisSol output)",
+    )
+
+args = parser.parse_args()
+
+if args.proj:
+    from pyproj import Transformer
+
+    # epsg:4326 is the coordinate reference system WGS 84 (lat, lon)
+    transformer = Transformer.from_crs(args.proj[0], "epsg:4326", always_xy=True)
+
+fo = FaultOutput(args.filename, args.ndt)
+fo.read_final_slip()
+fo.compute_strike_dip(args.refVector)
+fo.compute_rake(args.invertSld)
+fo.compute_barycenter_coords()
+fo.compute_Garea(cmt.compute_rigidity(args.muDescription, args.muValue, fo.xyzc))
+
+if args.STFfromSR:
+    fo_SR = FaultOutput(args.STFfromSR[0])
+    fo_SR.compute_barycenter_coords()
+    fo.compute_face_moment_rate_from_slip_rate(fo_SR)
+else:
+    fo.compute_face_moment_rate_from_ASl()
+
+fo.compute_face_moment_tensor_NED()
+
+if args.command == "temporal":
+    fo.fault_tags[:] = 3
+    fo.unique_fault_tags = [3]
+
+M0_eq = 0
+nsrc_eq = 0
+point_sources = {}
+
+for fault_tag in fo.unique_fault_tags:
+    selected = np.where(fo.fault_tags == fault_tag)[0]
+    if args.command == "temporal":
+        if args.time_range:
+            t0 = args.time_range[0]
+            tmax = args.time_range[1]
+        else:
+            t0 = 0.0
+            tmax = fo.dt * fo.ndt
+        if args.time_sub_events:
+            t_abs_slices = [t0 + val for val in args.time_sub_events]
+            hslices = [t0, *t_abs_slices, tmax]
+            sprint = f"user defined time for sub_events: {hslices}"
+        else:
+            hslices = np.linspace(t0, tmax, (args.DH[0] + 1))
+            sprint = f"{len(hslices)-1} slices along rupture time ({t0}-{tmax}s)"
+        # hslices[-1] = 1e10
+        h_or_RT = fo.get_rupture_time()
+    else:
+        if not args.vH:
+            from sklearn.decomposition import PCA
+
+            print("args.VH not set... inferring from PCA")
+            # Perform PCA to get principal axes
+            pca = PCA(n_components=2)
+            points = pca.fit_transform(fo.xyzc[selected, 0:2])
+            ua, ub = pca.components_
+            print(ua, ub)
+            args.vH = [ua[0], ua[1]]
+
+        h_or_RT = args.vH[0] * fo.xyzc[selected, 0] + args.vH[1] * fo.xyzc[selected, 1]
+        hslices = cmt.compute_slices_array_enforcing_dx(
+            h_or_RT, fo.slip[selected], args.DH[0], args.slip_threshold[0]
+        )
+        sprint = f"{len(hslices)-1} slices along horizontal direction :\
+         ({args.vH[0]},{args.vH[1]})"
+
+    print(f"{sprint}, {args.NZ[0]} along z")
+    zcenters0 = fo.xyzc[selected, 2]
+    zslices = cmt.compute_slices_array(
+        zcenters0, fo.slip[selected], args.NZ[0], args.slip_threshold[0]
+    )
+
+    nsources = (len(hslices) - 1) * args.NZ[0]
+    aNormMRF = np.zeros((nsources, fo.ndt))
+    aMomentTensor = np.zeros((nsources, 6))
+    axyz = np.zeros((nsources, 3))
+
+    M0_segment = 0
+    isrc_segment = 0
+    for i in range(len(hslices) - 1):
+        h_or_RT1, h_or_RT2 = hslices[i], hslices[i + 1]
+        for j in range(args.NZ[0]):
+            z1, z2 = zslices[j], zslices[j + 1]
+
+            idxys = np.where((h_or_RT >= h_or_RT1) & (h_or_RT < h_or_RT2))
+            idzs = np.where((zcenters0 >= z1) & (zcenters0 < z2))
+            ids = np.intersect1d(idxys[0], idzs[0])
+
+            (
+                M0,
+                NormMRF,
+                MomentTensor,
+                xyz,
+            ) = fo.compute_equivalent_point_source_subfault(selected[ids])
+            if not M0:
+                continue
+
+            if args.proj:
+                # project back to geocentric coordinates
+                xyz[0], xyz[1] = transformer.transform(xyz[0], xyz[1])
+
+            M0_segment = M0_segment + M0
+            (
+                aNormMRF[isrc_segment, :],
+                aMomentTensor[isrc_segment, :],
+                axyz[isrc_segment, :],
+            ) = (
+                NormMRF,
+                MomentTensor,
+                xyz,
+            )
+            isrc_segment = isrc_segment + 1
+
+    M0_eq += M0_segment
+    nsrc_eq += isrc_segment
+    Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07
+    print(
+        f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm), {isrc_segment} sources"
+    )
+
+    aMomentTensor = cmt.NED2RTP(aMomentTensor[0:isrc_segment, :])
+    aNormMRF = aNormMRF[0:isrc_segment, :]
+    axyz = axyz[0:isrc_segment, :]
+
+    point_sources[fault_tag] = {
+        "moment_tensors": aMomentTensor,
+        "moment_rate_functions": aNormMRF,
+        "locations": axyz,
+    }
+
+prefix = os.path.basename(args.filename.split("-fault")[0])
+if args.command == "temporal":
+    fname = f"PointSourceFile_{prefix}_nt{args.DH[0]}_nz{args.NZ[0]}.h5"
+else:
+    fname = f"PointSourceFile_{prefix}_dx{args.DH[0]}_nz{args.NZ[0]}.h5"
+cmt.write_point_source_file(fname, point_sources, fo.dt, args.proj)
+
+Mw = 2.0 / 3.0 * np.log10(M0_eq) - 6.07
+print(f"Mw(earthquake)={Mw:.2f} ({M0_eq:.2e} Nm), {nsrc_eq} sources")
