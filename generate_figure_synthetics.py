@@ -17,6 +17,7 @@ from waveform_figure_utils import (
 )
 from itertools import cycle
 import pickle
+import glob
 
 parser = argparse.ArgumentParser(
     description=(
@@ -36,6 +37,22 @@ ext = config.get("GENERAL", "figure_extension")
 font_size = config.get("GENERAL", "font_size")
 
 source_files = config.get("GENERAL", "source_files").split(",")
+
+all_files = []
+for source_file in source_files:
+    if os.path.isfile(source_file):
+        if source_file.endswith(".h5"):
+            all_files.append(source_file)
+    # check for all point source files in the folder
+    elif os.path.isdir(source_file):
+        pattern = os.path.join(source_file, "PointSource*.h5")
+        files_in_folder = glob.glob(pattern)
+        print(files_in_folder)
+        all_files.extend(files_in_folder)
+
+source_files = sorted(list(set(all_files)))
+print(f"{len(source_files)} source files found")
+
 client_name = config.get("GENERAL", "client")
 onset = config.get("GENERAL", "onset")
 t1 = UTCDateTime(onset)

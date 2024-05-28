@@ -8,6 +8,7 @@ from pyproj import Transformer
 from axitra import Axitra, moment
 import h5py
 from scipy.signal import fftconvolve
+from tqdm import tqdm
 
 
 def create_axitra_station_file(list_inventory):
@@ -129,7 +130,7 @@ def generate_synthetics_axitra(
     lst = []
     nsta = len(list_inventory)
 
-    for fname in source_files:
+    for fname in tqdm(source_files):
         # because of ap.clean, model and station_array_axitra need to be rewritten
         model = np.loadtxt(vel_model_fname, comments="#")
         stations_array_axitra = create_axitra_station_file(list_inventory)
