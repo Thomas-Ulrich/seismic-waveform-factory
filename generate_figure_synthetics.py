@@ -311,7 +311,8 @@ file_id = (
     .str.extract(r"[^0-9]+([0-9]+)", expand=False)
     .astype(int)
 )
-df_station_average["source_file"] = [source_files[k] for k in file_id]
+nsources = len(source_files)
+df_station_average["source_file"] = [source_files[k % nsources] for k in file_id]
 print(df_station_average)
 
 fname = "gof_average.pkl"
