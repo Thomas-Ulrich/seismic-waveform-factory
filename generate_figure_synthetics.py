@@ -304,8 +304,16 @@ print(f"done writing {fname}")
 
 df_merged.drop(columns=["station", "distance", "azimuth"], inplace=True)
 print("station average gof:")
-df_station_average = df_merged.mean(axis=0)
+df_station_average = df_merged.mean(axis=0).to_frame(name="gofa").reset_index()
+df_station_average = df_station_average.rename(columns={"index": "gofa_name"})
+file_id = (
+    df_station_average["gofa_name"]
+    .str.extract(r"[^0-9]+([0-9]+)", expand=False)
+    .astype(int)
+)
+df_station_average["source_file"] = [source_files[k] for k in file_id]
 print(df_station_average)
+
 fname = "gof_average.pkl"
 df_station_average.to_pickle(fname)
 print(f"done writing {fname}")
