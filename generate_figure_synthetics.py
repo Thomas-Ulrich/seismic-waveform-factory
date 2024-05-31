@@ -37,6 +37,7 @@ ext = config.get("GENERAL", "figure_extension")
 font_size = config.get("GENERAL", "font_size")
 
 source_files = config.get("GENERAL", "source_files").split(",")
+source_files = [val.strip() for val in source_files]
 
 all_files = []
 for source_file in source_files:
