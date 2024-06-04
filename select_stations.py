@@ -145,38 +145,61 @@ def select_telseismic_stations_aiming_for_azimuthal_coverage(inv0, event, nstati
     return df_selected, df
 
 
-if __name__ == "__main__":
+def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="select n stations ensuring an optimal coverage of an earthquake"
+        description="Select stations ensuring optimal coverage for an earthquake."
     )
-    parser.add_argument("config_file", help="config file describing the event")
+    parser.add_argument("config_file", help="Config file describing the event.")
     parser.add_argument(
-        "number_stations", help="number of stations to select", type=int
+        "number_stations", type=int, help="Number of stations to select."
     )
     parser.add_argument(
         "--azimuthal",
-        dest="azimuthal",
-        default=False,
         action="store_true",
-        help="select stations based on back-azimuth (else based on distance)",
+        help="Select stations based on back-azimuth (else based on distance).",
     )
+    return parser.parse_args()
 
-    args = parser.parse_args()
 
+def read_config(config_file):
     config = configparser.ConfigParser()
-    assert os.path.isfile(args.config_file), f"{args.config_file} not found"
-    config.read(args.config_file)
+    assert os.path.isfile(config_file), f"{config_file} not found"
+    config.read(config_file)
+    return config
+
+
+def load_or_create_inventory(
+    client, client_name, event, path_observations, min_max_radius, t_before, t_after
+):
+    fn_inventory = f"{path_observations}/inv_{client_name}.xml"
+    if os.path.exists(fn_inventory):
+        inventory = read_inventory(fn_inventory)
+    else:
+        starttime = event["onset"] - t_before
+        endtime = event["onset"] + t_after
+        inventory = client.get_stations(
+            latitude=event["latitude"],
+            longitude=event["longitude"],
+            starttime=starttime,
+            endtime=endtime,
+            level="channel",
+            minradius=min_max_radius[0],
+            maxradius=min_max_radius[1],
+            channel="*Z",
+        )
+        inventory.write(fn_inventory, format="STATIONXML")
+    return inventory
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    config = read_config(args.config_file)
 
     client_name = config.get("GENERAL", "client")
     onset = config.get("GENERAL", "onset")
     hypo_lon = config.getfloat("GENERAL", "hypo_lon")
     hypo_lat = config.getfloat("GENERAL", "hypo_lat")
-
-    if config.has_option("GENERAL", "stations"):
-        config_stations = config.get("GENERAL", "stations")
-    else:
-        config_stations = ""
-
+    config_stations = config.get("GENERAL", "stations", fallback="")
     path_observations = config.get("GENERAL", "path_observations")
     kind_vd = config.get("GENERAL", "kind")
     software = config.get("GENERAL", "software").split(",")
@@ -207,30 +230,16 @@ if __name__ == "__main__":
     starttime = event["onset"] - t_before
     endtime = event["onset"] + t_after
 
-    if not os.path.exists(path_observations):
-        os.makedirs(path_observations)
-        print(f"done creating {path_observations}")
-
-    fn_inventory = f"{path_observations}/inv_{client_name}.xml"
-    if os.path.exists(fn_inventory):
-        inventory = read_inventory(fn_inventory)
-    else:
-        # Get station information around the event
-        inventory = client.get_stations(
-            latitude=event["latitude"],
-            longitude=event["longitude"],
-            starttime=starttime,
-            endtime=endtime,
-            level="channel",
-            # includerestricted=False,
-            # includeavailability = True,
-            # matchtimeseries=True,
-            minradius=min_max_radius[0],
-            maxradius=min_max_radius[1],
-            channel="*Z",
-        )
-        inventory.write(fn_inventory, format="STATIONXML")
-    print(inventory)
+    os.makedirs(path_observations, exist_ok=True)
+    inventory = load_or_create_inventory(
+        client,
+        client_name,
+        event,
+        path_observations,
+        min_max_radius,
+        t_before,
+        t_before,
+    )
 
     available_stations = generate_geopanda_dataframe(inventory)
     print("available")
