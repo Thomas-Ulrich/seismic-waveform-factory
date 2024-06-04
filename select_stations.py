@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client, RoutingClient
-import pandas as pd
 from obspy.geodetics.base import gps2dist_azimuth
+from obspy.core.inventory import Inventory
+from obspy import read_inventory
+import pandas as pd
 import numpy as np
-from plot_station_map import generate_station_map
 import argparse
 import configparser
 import os
 import jinja2
-from retrieve_waveforms import retrieve_waveforms
-from obspy import read_inventory
+import geopandas as gpd
 from geopy.distance import geodesic
 from shapely.geometry import Point
-import geopandas as gpd
+from shapely.ops import nearest_points
+from pyproj import Transformer
+from retrieve_waveforms import retrieve_waveforms
+from plot_station_map import generate_station_map
 from extract_fault_boundary import compute_shapely_polygon
 
 np.random.seed(42)
@@ -203,14 +206,37 @@ def load_or_create_inventory(
     return inventory
 
 
-def compute_min_max_coords(fault_info):
-    from pyproj import Transformer
+def filter_by_dist(inventory, fault_info, min_dist_km, max_dist_km):
+    projection = fault_info["projection"]
+    transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
+    polygons = fault_info["polygons"]
 
+    filtered_inventory = Inventory()
+
+    for station in [sta for net in inventory for sta in net]:
+        x1, y1 = transformer.transform(station.longitude, station.latitude)
+        station_point = Point(x1, y1)
+        min_distance = float("inf")
+
+        for fault_polygon in polygons:
+            nearest_point = nearest_points(station_point, fault_polygon)[1]
+            distance = station_point.distance(nearest_point)
+            if distance < min_distance:
+                min_distance = distance
+        min_distance /= 1e3
+        if min_dist_km <= min_distance <= max_dist_km:
+            filtered_inventory += inventory.select(station=station.code)
+            print(
+                f"Station {station.code}: Distance to nearest fault = {min_distance:.2f} km"
+            )
+
+    return filtered_inventory
+
+
+def compute_min_max_coords(fault_info):
     # Initialize the transformer with the provided projection
     projection = fault_info["projection"]
     transformer = Transformer.from_crs(projection, "epsg:4326", always_xy=True)
-
-    # Extract the polygons
     polygons = fault_info["polygons"]
 
     # Initialize min and max coordinates
@@ -297,6 +323,11 @@ if __name__ == "__main__":
         t_before,
         t_before,
     )
+
+    if faultfname:
+        inventory = filter_by_dist(
+            inventory, fault_info, min_dist_km=0, max_dist_km=100
+        )
 
     available_stations = generate_geopanda_dataframe(inventory)
     print("available")
