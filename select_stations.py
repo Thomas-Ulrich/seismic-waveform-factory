@@ -4,7 +4,7 @@ from obspy.clients.fdsn import Client, RoutingClient
 import pandas as pd
 from obspy.geodetics.base import gps2dist_azimuth
 import numpy as np
-from plot_teleseismic_station_map import generate_station_map
+from plot_station_map import generate_station_map
 import argparse
 import configparser
 import os
@@ -170,7 +170,7 @@ def read_config(config_file):
 
 
 def load_or_create_inventory(
-    client, client_name, event, path_observations, min_max_radius, t_before, t_after
+    client, client_name, event, path_observations, spatial_range, t_before, t_after
 ):
     fn_inventory = f"{path_observations}/inv_{client_name}.xml"
     if os.path.exists(fn_inventory):
@@ -178,18 +178,57 @@ def load_or_create_inventory(
     else:
         starttime = event["onset"] - t_before
         endtime = event["onset"] + t_after
+        kargs = {}
+        r0, r1 = spatial_range["radius"]
+        if "source_lon_range" in spatial_range.keys():
+            kargs["minlongitude"] = spatial_range["source_lon_range"][0] - r1
+            kargs["maxlongitude"] = spatial_range["source_lon_range"][1] + r1
+            kargs["minlatitude"] = spatial_range["source_lat_range"][0] - r1
+            kargs["maxlatitude"] = spatial_range["source_lat_range"][1] + r1
+        else:
+            kargs["minradius"] = r0
+            kargs["maxradius"] = r1
+            kargs["latitude"] = event["latitude"]
+            kargs["longitude"] = event["longitude"]
+        print(kargs)
+
         inventory = client.get_stations(
-            latitude=event["latitude"],
-            longitude=event["longitude"],
             starttime=starttime,
             endtime=endtime,
             level="channel",
-            minradius=min_max_radius[0],
-            maxradius=min_max_radius[1],
             channel="*Z",
+            **kargs,
         )
         inventory.write(fn_inventory, format="STATIONXML")
     return inventory
+
+
+def compute_min_max_coords(fault_info):
+    from pyproj import Transformer
+
+    # Initialize the transformer with the provided projection
+    projection = fault_info["projection"]
+    transformer = Transformer.from_crs(projection, "epsg:4326", always_xy=True)
+
+    # Extract the polygons
+    polygons = fault_info["polygons"]
+
+    # Initialize min and max coordinates
+    min_x, min_y = float("inf"), float("inf")
+    max_x, max_y = float("-inf"), float("-inf")
+
+    # Transform each polygon and compute min/max coordinates
+    for poly in polygons:
+        x1, y1 = poly.exterior.xy
+        x1, y1 = transformer.transform(x1, y1)
+
+        min_x = min(min_x, min(x1))
+        min_y = min(min_y, min(y1))
+        max_x = max(max_x, max(x1))
+        max_y = max(max_y, max(y1))
+
+    # Return the min and max coordinates
+    return (min_x, max_x), (min_y, max_y)
 
 
 if __name__ == "__main__":
@@ -208,12 +247,18 @@ if __name__ == "__main__":
 
     faultfname = config.get("GENERAL", "fault_filename", fallback=None)
 
+    spatial_range = {}
+
     if faultfname:
         polygons = compute_shapely_polygon(faultfname)
         projection = config.get("GENERAL", "projection")
         fault_info = {}
         fault_info["projection"] = projection
         fault_info["polygons"] = polygons
+        lon_range, lat_range = compute_min_max_coords(fault_info)
+        spatial_range["source_lon_range"] = lon_range
+        spatial_range["source_lat_range"] = lat_range
+
     else:
         fault_info = None
 
@@ -221,7 +266,7 @@ if __name__ == "__main__":
         duration = config.getfloat("GENERAL", "axitra_pyprop8_duration")
         t_before = 100
         t_after = duration + 100
-        min_max_radius = [0.0, 2.5]
+        spatial_range["radius"] = [0.0, 2.5]
     else:
         import instaseis
 
@@ -229,7 +274,7 @@ if __name__ == "__main__":
         db = instaseis.open_db(db_name)
         t_before = 1000
         t_after = db.info.length + 1000
-        min_max_radius = [30, 90]
+        spatial_range["radius"] = [30, 90]
 
     if client_name in ["eida-routing", "iris-federator"]:
         client = RoutingClient(client_name)
@@ -248,7 +293,7 @@ if __name__ == "__main__":
         client_name,
         event,
         path_observations,
-        min_max_radius,
+        spatial_range,
         t_before,
         t_before,
     )
