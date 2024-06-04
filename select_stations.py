@@ -14,6 +14,7 @@ from obspy import read_inventory
 from geopy.distance import geodesic
 from shapely.geometry import Point
 import geopandas as gpd
+from extract_fault_boundary import compute_shapely_polygon
 
 np.random.seed(42)
 
@@ -205,6 +206,17 @@ if __name__ == "__main__":
     software = config.get("GENERAL", "software").split(",")
     is_teleseismic = "axitra" not in software
 
+    faultfname = config.get("GENERAL", "fault_filename", fallback=None)
+
+    if faultfname:
+        polygons = compute_shapely_polygon(faultfname)
+        projection = config.get("GENERAL", "projection")
+        fault_info = {}
+        fault_info["projection"] = projection
+        fault_info["polygons"] = polygons
+    else:
+        fault_info = None
+
     if not is_teleseismic:
         duration = config.getfloat("GENERAL", "axitra_pyprop8_duration")
         t_before = 100
@@ -295,7 +307,7 @@ if __name__ == "__main__":
             print(selected_stations)
             break
 
-    generate_station_map(selected_stations, event)
+    generate_station_map(selected_stations, event, fault_info=fault_info)
     if "{{ stations }}" in config_stations:
         templateLoader = jinja2.FileSystemLoader(searchpath=os.getcwd())
         templateEnv = jinja2.Environment(loader=templateLoader)

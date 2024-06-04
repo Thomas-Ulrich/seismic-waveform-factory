@@ -9,6 +9,7 @@ import argparse
 import configparser
 from obspy.clients.fdsn import Client, RoutingClient
 import os
+from extract_fault_boundary import compute_shapely_polygon
 
 
 def retrieve_coordinates(client_name, event, station_codes):
@@ -42,7 +43,7 @@ def retrieve_coordinates(client_name, event, station_codes):
     return df
 
 
-def generate_station_map(df, event, set_global=False, setup_name=""):
+def generate_station_map(df, event, set_global=False, setup_name="", fault_info=None):
     plt.figure(figsize=(6, 6))
     if set_global:
         projection = ccrs.Orthographic(
@@ -82,6 +83,16 @@ def generate_station_map(df, event, set_global=False, setup_name=""):
         zorder=3,
         transform=geo,
     )
+    if fault_info:
+        from pyproj import Transformer
+
+        projection = fault_info["projection"]
+        transformer = Transformer.from_crs(projection, "epsg:4326", always_xy=True)
+        polygons = fault_info["polygons"]
+        for poly in polygons:
+            x1, y1 = poly.exterior.xy
+            x1, y1 = transformer.transform(x1, y1)
+            plt.plot(x1, y1, "b--", zorder=4, transform=geo)
 
     for i in range(len(names)):
         # Create text box with semi-opaque background
@@ -133,4 +144,15 @@ if __name__ == "__main__":
     df = retrieve_coordinates(client_name, event, station_codes)
     print(df)
 
-    generate_station_map(df, event, set_global, setup_name)
+    faultfname = config.get("GENERAL", "fault_filename", fallback=None)
+
+    if faultfname:
+        polygons = compute_shapely_polygon(faultfname)
+        projection = config.get("GENERAL", "projection")
+        fault_info = {}
+        fault_info["projection"] = projection
+        fault_info["polygons"] = polygons
+    else:
+        fault_info = None
+
+    generate_station_map(df, event, set_global, setup_name, fault_info=fault_info)
