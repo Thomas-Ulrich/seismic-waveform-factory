@@ -112,6 +112,26 @@ def get_waveforms(
     return st_obs0
 
 
+def get_pre_filt(selected_band):
+    if selected_band == "L":
+        return [0.00033, 0.001, 0.1, 0.3]
+    else:
+        return [0.001, 0.005, 45, 50]
+
+
+def select_band(channels):
+    priorities = ["H", "B", "M", "L"]
+    for band in priorities:
+        if any(channel.startswith(band) for channel in channels):
+            if any(channel.startswith(band + "H") for channel in channels):
+                return band + "H"
+            elif any(channel.startswith(band + "N") for channel in channels):
+                return band + "N"
+            else:
+                return band
+    return None
+
+
 def retrieve_waveforms(
     network_station, client_name, kind_vd, path_observations, t1, t2
 ):
@@ -158,25 +178,9 @@ def retrieve_waveforms(
             def has_band(x):
                 return any(channel.startswith(x) for channel in channels)
 
-            if has_band("H"):
-                selected_band = "H"
-            elif has_band("B"):
-                selected_band = "B"
-            elif has_band("M"):
-                selected_band = "M"
-            elif has_band("L"):
-                selected_band = "L"
-            else:
-                print(f"{station.code} has not the expected channels: {channels}")
-                continue
-
-            # now considering the second letter
-            if has_band(selected_band + "H"):
-                selected_band += "H"
-            elif has_band(selected_band + "N"):
-                selected_band += "N"
-            else:
-                print(f"{station.code} has not the expected channels: {channels}")
+            selected_band = select_band(channels)
+            if not selected_band:
+                print(f"{station.code} does not have the expected channels: {channels}")
                 continue
 
             st_obs0 = get_waveforms(
@@ -195,9 +199,9 @@ def retrieve_waveforms(
                 "velocity": "VEL",
                 "displacement": "DISP",
             }
-            pre_filt = [0.001, 0.005, 45, 50]
-            if selected_band == "L":
-                pre_filt = [0.00033, 0.001, 0.1, 0.3]
+
+            pre_filt = get_pre_filt(selected_band)
+
             try:
                 st_obs0.remove_response(
                     output=output_dic[kind_vd],
