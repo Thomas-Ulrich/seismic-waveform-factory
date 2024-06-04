@@ -17,6 +17,7 @@ import geopandas as gpd
 
 np.random.seed(42)
 
+
 def compute_dict_network_station(df):
     networks = set(df["network"])
     network_station = {}
@@ -62,41 +63,38 @@ def generate_geopanda_dataframe(inv0):
 def select_stations_most_distant(available_stations, selected_stations, nstations):
     if len(selected_stations) == 0:
         print("selected_stations is empty, selecting randomly from available_stations")
-        # Initialize with a random starting station
-        # and remove the selected station from the available_stations
         selected_stations = available_stations.sample(1)
-        available_stations = available_stations.drop(
-            index=selected_stations.index.values[0]
-        )
+        available_stations = available_stations.drop(selected_stations.index)
 
-    # Iterate through the remaining stations and select the one that is farthest from the currently selected stations
     nselected = len(selected_stations)
-    for k in range(nstations - nselected):
+    remaining_stations = nstations - nselected
+
+    if remaining_stations <= 0:
+        return selected_stations.sort_index(), available_stations.sort_index()
+
+    for _ in range(remaining_stations):
         if available_stations.empty:
-            print(f"GeoDataFrame is empty, {nstations-1-k} stations will be missing")
+            print(
+                f"GeoDataFrame is empty, {remaining_stations} stations will be missing"
+            )
             break
 
-        max_distance = 0
-        furthest_station = None
-
-        for index, row in available_stations.iterrows():
+        distances = []
+        for _, row in available_stations.iterrows():
             distance = min(
-                [
-                    haversine_distance(
-                        row.latitude, row.longitude, station.latitude, station.longitude
-                    )
-                    for station in selected_stations.itertuples()
-                ]
+                haversine_distance(
+                    row.latitude, row.longitude, station.latitude, station.longitude
+                )
+                for station in selected_stations.itertuples(index=False)
             )
-            if distance > max_distance:
-                max_distance = distance
-                furthest_station = row
+            distances.append((distance, row))
+
+        furthest_station = max(distances, key=lambda x: x[0])[1]
         selected_stations = pd.concat(
             [selected_stations, furthest_station.to_frame().T]
         )
-        available_stations = available_stations.drop(
-            index=furthest_station.name
-        )  # Remove the selected station from the GeoDataFrame
+        available_stations = available_stations.drop(furthest_station.name)
+
     return selected_stations.sort_index(), available_stations.sort_index()
 
 
@@ -235,7 +233,7 @@ if __name__ == "__main__":
     print(inventory)
 
     available_stations = generate_geopanda_dataframe(inventory)
-    print('available')
+    print("available")
     print(available_stations)
     # required if not enough stations in the inventory
     args.number_stations = min(args.number_stations, len(available_stations))
@@ -243,7 +241,6 @@ if __name__ == "__main__":
     selected_stations = pd.DataFrame(columns=available_stations.columns)
 
     while True:
-
         if args.azimuthal:
             (
                 selected_stations,
@@ -257,7 +254,9 @@ if __name__ == "__main__":
                 available_stations, selected_stations, args.number_stations
             )
 
-        added_rows = selected_stations[~selected_stations['code'].isin(previous_selected_stations['code'])]
+        added_rows = selected_stations[
+            ~selected_stations["code"].isin(previous_selected_stations["code"])
+        ]
         print("selection:", selected_stations)
         print("added:", added_rows)
         print("available:", available_stations)
@@ -268,13 +267,19 @@ if __name__ == "__main__":
         )
         retrieved_stations = list(retrieved_waveforms.keys())
         print("retrieved_stations", retrieved_stations)
-        added_rows = selected_stations[selected_stations['code'].isin(retrieved_stations)]
+        added_rows = selected_stations[
+            selected_stations["code"].isin(retrieved_stations)
+        ]
         print("retrieved rows", added_rows)
-        selected_stations = pd.concat([previous_selected_stations, added_rows], ignore_index=True)
+        selected_stations = pd.concat(
+            [previous_selected_stations, added_rows], ignore_index=True
+        )
         print("new selected_stations", selected_stations)
-        
+
         # required if not enough stations in the inventory
-        args.number_stations = min(args.number_stations, len(selected_stations) + len(available_stations))
+        args.number_stations = min(
+            args.number_stations, len(selected_stations) + len(available_stations)
+        )
 
         if len(selected_stations) == args.number_stations:
             print("done selecting stations")
