@@ -2,8 +2,114 @@ from obspy import read
 from lxml.etree import XMLSyntaxError
 from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.clients.fdsn import Client, RoutingClient
+from obspy.core.inventory import Inventory
 import gzip
 import os
+
+
+def get_level_station_wise(client, network, stations, level, t1):
+    inv = Inventory()
+    exceptions_to_catch = (FDSNNoDataException, XMLSyntaxError, gzip.BadGzipFile)
+
+    for station in stations:
+        max_retries = 5
+        for retry_count in range(max_retries):
+            try:
+                if retry_count == 0:
+                    print(
+                        f"Getting {level}s for network {network} and station {station}..."
+                    )
+                inventory = client.get_stations(
+                    network=network,
+                    station=station,
+                    level=level,
+                    starttime=t1,
+                )
+                inv.extend(inventory)
+                break
+            except exceptions_to_catch as e:
+                if retry_count == max_retries - 1:
+                    print(f"Max retry count reached for {network}. Skipping.")
+                    print(f"Failed getting {level} for {station}")
+                    print(f"Error: {e.__class__.__name__}")
+                else:
+                    print(
+                        f"Error occurred in get_station for network {network} at station {station}: {e.__class__.__name__}"
+                    )
+                continue
+
+    return inv
+
+
+def get_level_network_wise(client, network, stations, level, t1):
+    max_retries = 5
+    inv = Inventory()
+    exceptions_to_catch = (FDSNNoDataException, XMLSyntaxError, gzip.BadGzipFile)
+
+    for retry_count in range(max_retries):
+        try:
+            if retry_count == 0:
+                print(f"Getting {level}s for network {network}...")
+            inv = client.get_stations(
+                network=network,
+                station=",".join(stations),
+                level=level,
+                starttime=t1,
+            )
+            break
+        except exceptions_to_catch as e:
+            if retry_count == max_retries - 1:
+                print(f"Max retry count reached for {network}. Skipping.")
+                print(f"Error: {e.__class__.__name__}")
+            else:
+                print(
+                    f"Error occurred in get_station for network {network}: {e.__class__.__name__}"
+                )
+            continue
+
+    return inv
+
+
+def get_waveforms(
+    client, network, station, selected_band, t1, t2, is_routing_client=False
+):
+    max_retries = 5
+    exceptions_to_catch = (FDSNNoDataException, XMLSyntaxError)
+    st_obs0 = False
+
+    if is_routing_client:
+        kwargs = {}
+    else:
+        kwargs = {"attach_response": True}
+
+    for retry_count in range(max_retries):
+        try:
+            st_obs0 = client.get_waveforms(
+                network=network,
+                station=station.code,
+                location="*",
+                channel=f"{selected_band}*",
+                starttime=t1,
+                endtime=t2,
+                **kwargs,
+            )
+            if not st_obs0:
+                print(f"Got empty stream for {network} {station.code}")
+            break
+        except exceptions_to_catch as e:
+            if retry_count == max_retries - 1:
+                print(f"Max retry count reached for {station.code}. Skipping.")
+                print(f"Error: {e.__class__.__name__}")
+            else:
+                print(
+                    f"Error occurred in get_waveforms for {station.code}: {e.__class__.__name__}"
+                )
+            continue
+
+    if not st_obs0:
+        print(f"No waveform available for {station.code}")
+
+    return st_obs0
 
 
 def retrieve_waveforms(
@@ -31,44 +137,17 @@ def retrieve_waveforms(
                 stations.remove(station)
         if not stations:
             continue
-        max_retries = 5
-        retry_count = 0
-        while retry_count < max_retries:
-            try:
-                if retry_count == 0:
-                    print(f"getting {level}s for network {network}...")
-                inventory = client.get_stations(
-                    network=network,
-                    station=",".join(stations),
-                    level=level,
-                    starttime=t1,
-                )
-                break
-            except FDSNNoDataException:
-                print(
-                    f"FDSNNoDataException Error occurred in get_station for network {network}, with stations {stations}"
-                )
-                retry_count += 1
-                if retry_count == max_retries:
-                    print(f"Max retry count reached for {network}. Skipping.")
-                    break
-            except XMLSyntaxError:
-                print(f"XML Syntax Error occurred in get_station for network {network}")
-                retry_count += 1
-                if retry_count == max_retries:
-                    print(f"Max retry count reached for {network}. Skipping.")
-                    break
-            except gzip.BadGzipFile:
-                print(
-                    f"gzip.BadGzipFile Error occurred in get_station for network {network}"
-                )
-                retry_count += 1
-                if retry_count == max_retries:
-                    print(f"Max retry count reached for {network}. Skipping.")
-                    break
-        if retry_count == max_retries:
+
+        if "level" == "channel":
+            inventory = get_level_network_wise(client, network, stations, level, t1)
+        else:
+            inventory = get_level_station_wise(client, network, stations, level, t1)
+
+        if len(inventory) == 0:
+            print(f"could not get {level} for {network}")
             continue
-        for station in inventory[0]:
+
+        for station in [sta for net in inventory for sta in net]:
             code = f"{network}.{station.code}"
             fname = f"{code}_{kind_vd}_{t1.date}.mseed"
             fullfname = os.path.join(path_observations, fname)
@@ -100,42 +179,13 @@ def retrieve_waveforms(
                 print(f"{station.code} has not the expected channels: {channels}")
                 continue
 
-            max_retries = 5
-            retry_count = 0
-            got_data = False
-            while retry_count < max_retries:
-                try:
-                    print(network, station.code, f"{selected_band}*", t1, t2)
-                    if is_routing_client:
-                        kwargs = {}
-                    else:
-                        kwargs = {"attach_response": True}
-                    st_obs0 = client.get_waveforms(
-                        network=network,
-                        station=station.code,
-                        location="*",
-                        channel=f"{selected_band}*",
-                        starttime=t1,
-                        endtime=t2,
-                        **kwargs,
-                    )
-                    got_data = True
-                    if len(st_obs0) == 0:
-                        print(f"got empty stream for {network} {station.code}")
-                        got_data = False
-                    break
-                except FDSNNoDataException:
-                    print(f"no waveform available for {station.code}")
-                    break
-                except XMLSyntaxError:
-                    print(f"XML Syntax Error in get_waveforms for {station.code}")
-                    retry_count += 1
-                    if retry_count == max_retries:
-                        print(f"Max retry count for {station.code}. Skipping.")
-                        break
+            st_obs0 = get_waveforms(
+                client, network, station, selected_band, t1, t2, is_routing_client
+            )
 
-            if not got_data:
+            if not st_obs0:
                 continue
+
             st_obs0.rotate(method="->ZNE", inventory=inventory)
 
             # define a filter band to prevent amplifying noise during the deconvolution
