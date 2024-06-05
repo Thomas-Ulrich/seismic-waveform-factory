@@ -39,25 +39,49 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     return geodesic(coords_1, coords_2).km
 
 
-def generate_geopanda_dataframe(inv0):
+def compute_station_fault_distance(sta, polygons, transformer):
+    x1, y1 = transformer.transform(sta.longitude, sta.latitude)
+    station_point = Point(x1, y1)
+    min_distance = float("inf")
+
+    for fault_polygon in polygons:
+        nearest_point = nearest_points(station_point, fault_polygon)[1]
+        distance = station_point.distance(nearest_point)
+        if distance < min_distance:
+            min_distance = distance
+    min_distance /= 1e3
+    return min_distance
+
+
+def generate_geopanda_dataframe(inv0, fault_info):
     df = pd.DataFrame(
-        columns=[
-            "network",
-            "station",
-            "longitude",
-            "latitude",
-        ]
+        columns=["network", "station", "longitude", "latitude", "distance_km"]
     )
+    if fault_info:
+        projection = fault_info["projection"]
+        transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
+        polygons = fault_info["polygons"]
+
     for i, net in enumerate(inv0):
         for j, sta in enumerate(net):
+            if fault_info:
+                min_distance = compute_station_fault_distance(
+                    sta, polygons, transformer
+                )
+            else:
+                min_distance = -1.0
+
             new_row = {
                 "network": net.code,
                 "station": sta.code,
                 "longitude": sta.longitude,
                 "latitude": sta.latitude,
+                "distance_km": min_distance,
             }
             df.loc[len(df)] = new_row
     df["code"] = df["network"] + "." + df["station"]
+    df.sort_values(by="distance_km", inplace=True)
+    df = df.reset_index(drop=True)
     # Convert the latitude and longitude columns to a GeoDataFrame
     geometry = gpd.points_from_xy(df.longitude, df.latitude)
     crs = "epsg:4326"
@@ -206,33 +230,6 @@ def load_or_create_inventory(
     return inventory
 
 
-def filter_by_dist(inventory, fault_info, min_dist_km, max_dist_km):
-    projection = fault_info["projection"]
-    transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
-    polygons = fault_info["polygons"]
-
-    filtered_inventory = Inventory()
-
-    for station in [sta for net in inventory for sta in net]:
-        x1, y1 = transformer.transform(station.longitude, station.latitude)
-        station_point = Point(x1, y1)
-        min_distance = float("inf")
-
-        for fault_polygon in polygons:
-            nearest_point = nearest_points(station_point, fault_polygon)[1]
-            distance = station_point.distance(nearest_point)
-            if distance < min_distance:
-                min_distance = distance
-        min_distance /= 1e3
-        if min_dist_km <= min_distance <= max_dist_km:
-            filtered_inventory += inventory.select(station=station.code)
-            print(
-                f"Station {station.code}: Distance to nearest fault = {min_distance:.2f} km"
-            )
-
-    return filtered_inventory
-
-
 def compute_min_max_coords(fault_info):
     # Initialize the transformer with the provided projection
     projection = fault_info["projection"]
@@ -324,12 +321,13 @@ if __name__ == "__main__":
         t_before,
     )
 
-    if faultfname:
-        inventory = filter_by_dist(
-            inventory, fault_info, min_dist_km=0, max_dist_km=100
-        )
+    available_stations = generate_geopanda_dataframe(inventory, fault_info)
+    # Create a boolean mask and filter by distance
+    mask = (available_stations["distance_km"] >= 0) & (
+        available_stations["distance_km"] <= 100
+    )
+    available_stations = available_stations[mask]
 
-    available_stations = generate_geopanda_dataframe(inventory)
     print("available")
     print(available_stations)
     # required if not enough stations in the inventory
