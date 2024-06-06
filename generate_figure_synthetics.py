@@ -35,9 +35,15 @@ config.read(args.config_file)
 setup_name = config.get("GENERAL", "setup_name")
 ext = config.get("GENERAL", "figure_extension")
 font_size = config.get("GENERAL", "font_size")
+projection = config.get("GENERAL", "projection", fallback=None)
 
 source_files = config.get("GENERAL", "source_files").split(",")
 source_files = [val.strip() for val in source_files]
+
+seissol_outputs = config.get("GENERAL", "seissol_outputs", fallback=None)
+if seissol_outputs:
+    seissol_outputs = [val.strip() for val in seissol_outputs.split(",")]
+    assert projection != None
 
 all_files = []
 for source_file in source_files:
@@ -75,10 +81,13 @@ if ("axitra" in software) or ("pyprop8" in software):
         path2axitra = config.get("GENERAL", "axitra_path")
     prefix = f"plots/{setup_name}_{kind_vd}_{fmax}Hz_{duration}s"
 
+if seissol_outputs:
+    prefix = f"plots/{setup_name}_{kind_vd}_seissol"
+
+
 hypo_lon = config.getfloat("GENERAL", "hypo_lon")
 hypo_lat = config.getfloat("GENERAL", "hypo_lat")
 hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
-projection = config.get("GENERAL", "proj", fallback=None)
 station_codes_list = config.get("GENERAL", "stations")
 station_codes = [v.strip() for v in station_codes_list.split(",")]
 colors = config.get("GENERAL", "line_colors").split(",")
@@ -190,6 +199,16 @@ if Pwave_enabled and not (SHwave_enabled or surface_waves_enabled):
 gofall = [0 for i in range(len(source_files))]
 
 list_synthetics_all = []
+
+if seissol_outputs:
+    t_obs_before, t_obs_after = 100, 400
+    from seissol_receiver_processing import collect_seissol_synthetics
+
+    list_synthetics = collect_seissol_synthetics(
+        seissol_outputs, list_inventory, projection, t1
+    )
+    list_synthetics_all += list_synthetics
+
 
 if "axitra" in software:
     sys.path.append(path2axitra)
