@@ -74,3 +74,20 @@ def compute_shapely_polygon(faultfname):
         polygons += [poly]
 
     return polygons
+
+
+def get_fault_slip_coords(faultfname):
+    sx = seissolxdmf.seissolxdmf(faultfname)
+    xyz = sx.ReadGeometry()
+    connect = sx.ReadConnect()
+    xyzcenter = (
+        xyz[connect[:, 0], :] + xyz[connect[:, 1], :] + xyz[connect[:, 2], :]
+    ) / 3.0
+    fault_slip = sx.ReadData("ASl", sx.ReadNdt() - 1)
+    # Find elements where fault slip exceeds the threshold
+    fault_slip_mask = fault_slip > 0.01
+    if not np.any(fault_slip_mask):
+        print("No fault slip detected, returning the full coordinate array")
+        return xyzcenter
+    else:
+        return xyzcenter[fault_slip_mask, :]

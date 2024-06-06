@@ -17,7 +17,8 @@ from shapely.ops import nearest_points
 from pyproj import Transformer
 from retrieve_waveforms import retrieve_waveforms
 from plot_station_map import generate_station_map
-from extract_fault_boundary import compute_shapely_polygon
+from fault_processing import compute_shapely_polygon, get_fault_slip_coords
+from scipy import spatial
 
 np.random.seed(42)
 
@@ -39,20 +40,6 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     return geodesic(coords_1, coords_2).km
 
 
-def compute_station_fault_distance(sta, polygons, transformer):
-    x1, y1 = transformer.transform(sta.longitude, sta.latitude)
-    station_point = Point(x1, y1)
-    min_distance = float("inf")
-
-    for fault_polygon in polygons:
-        nearest_point = nearest_points(station_point, fault_polygon)[1]
-        distance = station_point.distance(nearest_point)
-        if distance < min_distance:
-            min_distance = distance
-    min_distance /= 1e3
-    return min_distance
-
-
 def generate_geopanda_dataframe(inv0, fault_info):
     df = pd.DataFrame(
         columns=["network", "station", "longitude", "latitude", "distance_km"]
@@ -60,14 +47,14 @@ def generate_geopanda_dataframe(inv0, fault_info):
     if fault_info:
         projection = fault_info["projection"]
         transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
-        polygons = fault_info["polygons"]
+        coords = fault_info["fault_slip_coords"] / 1e3
+        tree = spatial.KDTree(coords)
 
     for i, net in enumerate(inv0):
         for j, sta in enumerate(net):
             if fault_info:
-                min_distance = compute_station_fault_distance(
-                    sta, polygons, transformer
-                )
+                x1, y1 = transformer.transform(sta.longitude, sta.latitude)
+                min_distance, _ = tree.query([x1 / 1e3, y1 / 1e3, 0])
             else:
                 min_distance = -1.0
 
@@ -274,9 +261,11 @@ if __name__ == "__main__":
 
     if faultfname:
         polygons = compute_shapely_polygon(faultfname)
+        fault_slip_coords = get_fault_slip_coords(faultfname)
         projection = config.get("GENERAL", "projection")
         fault_info = {}
         fault_info["projection"] = projection
+        fault_info["fault_slip_coords"] = fault_slip_coords
         fault_info["polygons"] = polygons
         lon_range, lat_range = compute_min_max_coords(fault_info)
         spatial_range["source_lon_range"] = lon_range
@@ -322,11 +311,18 @@ if __name__ == "__main__":
     )
 
     available_stations = generate_geopanda_dataframe(inventory, fault_info)
-    # Create a boolean mask and filter by distance
-    mask = (available_stations["distance_km"] >= 0) & (
-        available_stations["distance_km"] <= 100
-    )
-    available_stations = available_stations[mask]
+    available_stations = available_stations[
+        available_stations["distance_km"] >= 30
+    ].reset_index(drop=True)
+    # + 10 because we expect some station with no data
+    if len(available_stations) > (args.number_stations + 10):
+        dmax = available_stations.iloc[args.number_stations + 10]["distance_km"]
+        print(dmax)
+        # Create a boolean mask and filter by distance
+        mask = (available_stations["distance_km"] >= 0) & (
+            available_stations["distance_km"] <= dmax
+        )
+        available_stations = available_stations[mask]
 
     print("available")
     print(available_stations)

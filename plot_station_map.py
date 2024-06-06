@@ -9,7 +9,7 @@ import argparse
 import configparser
 from obspy.clients.fdsn import Client, RoutingClient
 import os
-from extract_fault_boundary import compute_shapely_polygon
+from fault_processing import compute_shapely_polygon
 
 
 def retrieve_coordinates(client_name, event, station_codes):
