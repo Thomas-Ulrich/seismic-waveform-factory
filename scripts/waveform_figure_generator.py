@@ -195,7 +195,10 @@ class WaveformFigureGenerator:
             gofstring = ""
             annot = ""
             for ist, myst in enumerate(lst_copy):
-                gof, y0 = self.compute_misfit(myst, st_obs, comp, reftime)
+                try:
+                    gof, y0 = self.compute_misfit(myst, st_obs, comp, reftime)
+                except ValueError:
+                    gof, y0 = 0, 0
                 temp_dic[f"{self.signal_kind}_{comp}{ist}"] = gof
                 gofstring += f"{gof:.2f} "
                 if j == 0 and ist == n_kinematic_models - 1:

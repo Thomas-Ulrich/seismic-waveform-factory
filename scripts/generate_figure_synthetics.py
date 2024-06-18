@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from obspy import UTCDateTime
+from obspy import UTCDateTime, read
 from obspy.geodetics import locations2degrees
 from obspy.geodetics.base import gps2dist_azimuth
 import argparse
@@ -10,15 +10,16 @@ from retrieve_waveforms import retrieve_waveforms
 from waveform_figure_generator import WaveformFigureGenerator
 import sys
 from waveform_figure_utils import (
-    compile_list_inventories,
-    compile_station_coords,
-    reorder_station_coords_from_azimuth,
+    compile_station_coords_main,
     estimate_travel_time,
+    get_station_files_dict,
     merge_gof_dfs,
+    reorder_station_coords_from_azimuth,
 )
 from itertools import cycle
 import pickle
 import glob
+from warnings import warn
 
 parser = argparse.ArgumentParser(
     description=(
@@ -129,19 +130,18 @@ surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
 surface_waves_ncol_per_component = config.getint("SURFACE_WAVES", "ncol_per_component")
 surface_waves_components = config.get("SURFACE_WAVES", "components").split(",")
 
-station_codes_name = "_".join(station_codes)
-fn_list_inventory = f"observations/{station_codes_name}.pkl"
-print(f"checking if list_inventory stored in {fn_list_inventory}")
-if os.path.exists(fn_list_inventory):
-    list_inventory = pickle.load(open(fn_list_inventory, "rb"))
-else:
-    list_inventory = compile_list_inventories(client_name, station_codes, t1)
-    with open(fn_list_inventory, "wb") as f:
-        pickle.dump(list_inventory, f, pickle.HIGHEST_PROTOCOL)
 
-print([f"{inv[0][0].code}" for inv in list_inventory])
-station_coords = compile_station_coords(list_inventory)
+processed_waveforms = config.get("GENERAL", "processed_waveforms", fallback=None)
+station_file = config.get("GENERAL", "station_file", fallback=None)
+
+if processed_waveforms:
+    processed_station_files = get_station_files_dict(processed_waveforms)
+
+station_coords = compile_station_coords_main(
+    station_codes, station_file, client_name, t1
+)
 station_coords = reorder_station_coords_from_azimuth(station_coords, hypo_lon, hypo_lat)
+print(station_coords)
 
 nstations = len(station_coords)
 n_kinematic_models = len(source_files)
@@ -274,10 +274,21 @@ for ins, station_code in enumerate(station_coords):
     starttime = t1 - t_obs_before
     endtime = t1 + t_obs_after
     network_station = {network: [station]}
-    retrieved_waveforms = retrieve_waveforms(
-        network_station, client_name, kind_vd, path_observations, starttime, endtime
-    )
-    st_obs0 = retrieved_waveforms[f"{network}.{station}"]
+    code = f"{network}.{station}"
+    st_obs0 = None
+    if processed_waveforms:
+        if code in processed_station_files:
+            st_obs0 = read(processed_station_files[code])
+            warn("hardcoded 0.01 factor and integration")
+            # scale to m/s
+            for tr in st_obs0:
+                tr.data *= 0.01
+            st_obs0.integrate()
+    if not st_obs0:
+        retrieved_waveforms = retrieve_waveforms(
+            network_station, client_name, kind_vd, path_observations, starttime, endtime
+        )
+        st_obs0 = retrieved_waveforms[f"{network}.{station}"]
     network = st_obs0[0].stats.network
 
     lst = []

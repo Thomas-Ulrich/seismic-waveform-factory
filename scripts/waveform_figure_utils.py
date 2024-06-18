@@ -1,4 +1,5 @@
 import pandas as pd
+from obspy import read
 from obspy.taup import TauPyModel
 from obspy.geodetics.base import gps2dist_azimuth
 from obspy.clients.fdsn import Client, RoutingClient
@@ -6,6 +7,92 @@ import functools as ft
 from lxml.etree import XMLSyntaxError
 import gzip
 import pickle
+import os
+
+def get_station_name_from_mseed(file_path):
+    try:
+        stream = read(file_path)
+        # Assuming all traces in the stream belong to the same station
+        station_name = stream[0].stats.station
+        network_name = stream[0].stats.network
+        return f"{network_name}.{station_name}"
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+        return None
+
+def get_station_files_dict(directory):
+    station_files = {}
+    for file_name in os.listdir(directory):
+        if file_name.endswith(".mseed"):
+            file_path = os.path.join(directory, file_name)
+            station_name = get_station_name_from_mseed(file_path)
+            if station_name:
+                station_files[station_name] = file_path
+    nfiles = len(station_files)
+    print(f"found {nfiles} waveforms in {directory}")
+    return station_files
+
+def compile_station_coords_csv(station_codes, station_file):
+    if os.path.exists(station_file):
+        df = pd.read_csv(station_file)
+        # Assert that all expected columns are present in the DataFrame
+        expected_columns = ["station", "lon", "lat", "network"]
+        for column in expected_columns:
+            assert (
+                column in df.columns
+            ), f"Column '{column}' is missing from the DataFrame."
+
+        return {
+            f"{row['network']}.{row['station']}": (row["lon"], row["lat"])
+            for _, row in df.iterrows()
+        }
+
+def extract_station_coords_from_dict(station_codes, station_coords_all, station_file):
+    station_coords = {}
+    for station in station_codes:
+        if station in station_coords_all:
+            station_coords[station] = station_coords_all[station]
+        else:
+            print(f"{station} not found in {station_file}")
+    return station_coords
+
+
+def compile_missing_stations(station_codes, station_coords_all):
+    missing_stations = []
+    for station in station_codes:
+        if station not in station_coords_all:
+            missing_stations += [station]
+    return missing_stations
+
+
+def download_station_coords(station_codes, client_name, t1):
+    station_codes_name = "_".join(station_codes)
+    fn_list_inventory = f"observations/{station_codes_name}.pkl"
+    print(f"checking if list_inventory stored in {fn_list_inventory}")
+    if os.path.exists(fn_list_inventory):
+        list_inventory = pickle.load(open(fn_list_inventory, "rb"))
+    else:
+        list_inventory = compile_list_inventories(client_name, station_codes, t1)
+        with open(fn_list_inventory, "wb") as f:
+            pickle.dump(list_inventory, f, pickle.HIGHEST_PROTOCOL)
+
+    print([f"{inv[0][0].code}" for inv in list_inventory])
+    return compile_station_coords(list_inventory)
+
+
+def compile_station_coords_main(station_codes, station_file, client_name, t1):
+    station_coords = {}
+    if station_file:
+        station_coords_all = compile_station_coords_csv(station_codes, station_file)
+        station_coords = extract_station_coords_from_dict(
+            station_codes, station_coords_all, station_file
+        )
+    if len(station_coords) < len(station_codes):
+        missing_stations = compile_missing_stations(station_codes, station_coords)
+        print(missing_stations)
+        downloaded_coords = download_station_coords(missing_stations, client_name, t1)
+        station_coords = {**station_coords, **downloaded_coords}
+    return station_coords
 
 
 def compile_list_inventories(client_name, station_codes, t1):
