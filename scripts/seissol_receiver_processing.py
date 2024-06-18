@@ -13,6 +13,7 @@ from obspy import Stream
 import glob
 import numpy as np
 
+
 def read_seissol_receiver_file(output_path, idst, coords_only=False):
     """
     Read SeisSol receiver seismogram data.
@@ -36,9 +37,11 @@ def read_seissol_receiver_file(output_path, idst, coords_only=False):
         return None
 
     if len(files) > 1:
-        print(f"Warning: Multiple files match the pattern {file_pattern}. Using the first one: {files[0]}")
+        print(
+            f"Warning: Multiple files match the pattern {file_pattern}. Using the first one: {files[0]}"
+        )
 
-    with open(files[0], 'r') as file:
+    with open(files[0], "r") as file:
         # Skip the first line
         file.readline()
 
@@ -59,12 +62,13 @@ def read_seissol_receiver_file(output_path, idst, coords_only=False):
 
     return ([xsyn, ysyn, zsyn], variable_list, seismogram)
 
-def get_station_code_from_coordinates(inventory, lonlatdepth, eps=5e-3):
+
+def get_station_code_from_coordinates(station_coords, lonlatdepth, eps=5e-3):
     """
     Find the station code (e.g., KO.FOCM, HL.TNSA) from the given coordinates.
 
     Args:
-        inventory (obspy.core.inventory.Inventory): The inventory containing station information.
+        station_coords (dict): A dictionnary of station coordinates indexed by station code
         lonlatdepth (tuple or list): A tuple or list containing longitude, latitude, and depth values.
         eps (float, optional): The maximum allowable difference between coordinates (default: 5e-3).
 
@@ -73,19 +77,19 @@ def get_station_code_from_coordinates(inventory, lonlatdepth, eps=5e-3):
     """
     target_lon, target_lat, _ = lonlatdepth
 
-    for network in inventory:
-        for station in network:
-            station_lon = station.longitude
-            station_lat = station.latitude
-
-            if abs(station_lon - target_lon) < eps and abs(station_lat - target_lat) < eps:
-                station_code = f"{network.code}.{station.code}"
-                print(f"Station code: {station_code}, Longitude: {station_lon}, Latitude: {station_lat}")
-                return station_code
+    for station_code, lonlat in station_coords.items():
+        station_lon, station_lat = lonlat
+        if abs(station_lon - target_lon) < eps and abs(station_lat - target_lat) < eps:
+            print(
+                f"Station code: {station_code}, Longitude: {station_lon}, Latitude: {station_lat}"
+            )
+            return station_code
     return None
 
 
-def stream_from_seissol_data(network_code, station_code, variable_list, synth, starttime):
+def stream_from_seissol_data(
+    network_code, station_code, variable_list, synth, starttime
+):
     """
     Load SeisSol receiver data into an ObsPy Stream object.
 
@@ -107,7 +111,9 @@ def stream_from_seissol_data(network_code, station_code, variable_list, synth, s
         try:
             j = variable_list.tolist().index(uvw[i])
         except ValueError:
-            print(f"Variable '{uvw[i]}' not found in the variable list: {variable_list}")
+            print(
+                f"Variable '{uvw[i]}' not found in the variable list: {variable_list}"
+            )
             continue
 
         tr = Trace()
@@ -151,14 +157,15 @@ def create_zero_stream(network_code, station_code, starttime, delta=1.0, npts=2)
 
     return st_syn
 
-def compile_inv_lut_gm(folder_prefix, projection, inventory):
+
+def compile_inv_lut_gm(folder_prefix, projection, station_coords):
     """
     Compile an inverse lookup table for station codes and receiver IDs.
 
     Args:
         folder_prefix (str): The prefix of the folder containing the receiver data.
         projection (str or pyproj.Proj): The projection to use for coordinate transformations.
-        inventory (obspy.core.inventory.Inventory or None, optional): The inventory containing station information.
+        station_coords (dict): A dictionnary of station coordinates indexed by station code
 
     Returns:
         dict: A dictionary mapping station codes to receiver IDs for the specified stations.
@@ -179,7 +186,7 @@ def compile_inv_lut_gm(folder_prefix, projection, inventory):
         xyzs = read_seissol_receiver_file(folder_prefix, id_station, coords_only=True)
         lonlatdepth = transformer.transform(xyzs[0], xyzs[1], xyzs[2])
 
-        station_code = get_station_code_from_coordinates(inventory, lonlatdepth)
+        station_code = get_station_code_from_coordinates(station_coords, lonlatdepth)
         if station_code:
             station_lookup_table[id_station] = station_code
         else:
@@ -191,48 +198,39 @@ def compile_inv_lut_gm(folder_prefix, projection, inventory):
     inv_station_lookup_table = {v: k for k, v in station_lookup_table.items()}
     return inv_station_lookup_table
 
-def collect_seissol_synthetics(seissol_outputs, list_inventory, projection, t1):
+
+def collect_seissol_synthetics(seissol_outputs, station_coords, projection, t1):
     """
     Collect synthetic seismograms from SeisSol outputs.
 
     Args:
         seissol_outputs (list): A list of paths to SeisSol output directories.
-        list_inventory (list): A list of ObsPy inventory objects.
+        station_coords (dict): A dictionnary of station coordinates indexed by station code
         projection (str or pyproj.Proj): The projection to use for coordinate transformations.
         t1 (obspy.UTCDateTime): The start time of the seismograms.
 
     Returns:
         list: A list of ObsPy Stream objects containing synthetic seismograms.
     """
-    combined_inventory = list_inventory[0]
-    for inv in list_inventory[1:]:
-        combined_inventory += inv
-
     inv_station_lookup_tables = []
     for seissol_output_path in seissol_outputs:
         inv_station_lookup_tables.append(
-            compile_inv_lut_gm(seissol_output_path, projection, combined_inventory)
+            compile_inv_lut_gm(seissol_output_path, projection, station_coords)
         )
 
     list_synthetics = []
     for idsyn, seissol_output in enumerate(seissol_outputs):
         syn_st = Stream()
-        for net in combined_inventory:
-            for station in net:
-                station_code = f"{net.code}.{station.code}"
-                if station_code in inv_station_lookup_tables[idsyn]:
-                    id_station = inv_station_lookup_tables[idsyn][station_code]
-                    xyzs, variablelist, synth = read_seissol_receiver_file(
-                        seissol_output, id_station
-                    )
-                    syn_st += stream_from_seissol_data(
-                        net.code, station.code, variablelist, synth, t1
-                    )
-                else:
-                    print("Station {station_code} not found in SeisSol receivers")
-                    syn_st += create_zero_stream(net.code, station.code, t1)
+        for station_code in station_coords:
+            net, sta = station_code.split(".")
+            if station_code in inv_station_lookup_tables[idsyn]:
+                id_station = inv_station_lookup_tables[idsyn][station_code]
+                xyzs, variablelist, synth = read_seissol_receiver_file(
+                    seissol_output, id_station
+                )
+                syn_st += stream_from_seissol_data(net, sta, variablelist, synth, t1)
+            else:
+                print(f"Station {station_code} not found in SeisSol receivers")
+                syn_st += create_zero_stream(net, sta, t1)
         list_synthetics.append(syn_st)
     return list_synthetics
-
-
-

@@ -11,7 +11,8 @@ from waveform_figure_generator import WaveformFigureGenerator
 import sys
 from waveform_figure_utils import (
     compile_list_inventories,
-    reorder_station_using_azimuth,
+    compile_station_coords,
+    reorder_station_coords_from_azimuth,
     estimate_travel_time,
     merge_gof_dfs,
 )
@@ -128,7 +129,6 @@ surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
 surface_waves_ncol_per_component = config.getint("SURFACE_WAVES", "ncol_per_component")
 surface_waves_components = config.get("SURFACE_WAVES", "components").split(",")
 
-
 station_codes_name = "_".join(station_codes)
 fn_list_inventory = f"observations/{station_codes_name}.pkl"
 print(f"checking if list_inventory stored in {fn_list_inventory}")
@@ -140,10 +140,10 @@ else:
         pickle.dump(list_inventory, f, pickle.HIGHEST_PROTOCOL)
 
 print([f"{inv[0][0].code}" for inv in list_inventory])
+station_coords = compile_station_coords(list_inventory)
+station_coords = reorder_station_coords_from_azimuth(station_coords, hypo_lon, hypo_lat)
 
-list_inventory = reorder_station_using_azimuth(list_inventory, hypo_lon, hypo_lat)
-
-nstations = len(list_inventory)
+nstations = len(station_coords)
 n_kinematic_models = len(source_files)
 
 Pwave = WaveformFigureGenerator(
@@ -205,7 +205,7 @@ if seissol_outputs:
     from seissol_receiver_processing import collect_seissol_synthetics
 
     list_synthetics = collect_seissol_synthetics(
-        seissol_outputs, list_inventory, projection, t1
+        seissol_outputs, station_coords, projection, t1
     )
     list_synthetics_all += list_synthetics
 
@@ -216,7 +216,7 @@ if "axitra" in software:
 
     list_synthetics = generate_synthetics_axitra(
         source_files,
-        list_inventory,
+        station_coords,
         t1,
         kind_vd,
         fmax,
@@ -234,7 +234,7 @@ if "pyprop8" in software:
 
     list_synthetics = generate_synthetics_pyprop8(
         source_files,
-        list_inventory,
+        station_coords,
         t1,
         kind_vd,
         fmax,
@@ -250,7 +250,7 @@ if "instaseis" in software:
     list_synthetics = generate_synthetics_instaseis(
         db_name,
         source_files,
-        list_inventory,
+        station_coords,
         t1,
         kind_vd,
         components,
@@ -268,13 +268,12 @@ if "instaseis" in software:
         surface_waves.tmax = duration_synthetics
 
 
-for ins, inv in enumerate(list_inventory):
-    sta = inv[0][0]
-    network = inv[0].code
-    station = sta.code
+for ins, station_code in enumerate(station_coords):
+    lon, lat = station_coords[station_code]
+    network, station = station_code.split(".")
     starttime = t1 - t_obs_before
     endtime = t1 + t_obs_after
-    network_station = {inv[0].code: [sta.code]}
+    network_station = {network: [station]}
     retrieved_waveforms = retrieve_waveforms(
         network_station, client_name, kind_vd, path_observations, starttime, endtime
     )
@@ -284,12 +283,8 @@ for ins, inv in enumerate(list_inventory):
     lst = []
     for st_syn in list_synthetics_all:
         lst += [st_syn.select(station=station)]
-    dist = locations2degrees(
-        lat1=sta.latitude, long1=sta.longitude, lat2=hypo_lat, long2=hypo_lon
-    )
-    azimuth = gps2dist_azimuth(
-        lat1=sta.latitude, lon1=sta.longitude, lat2=hypo_lat, lon2=hypo_lon
-    )[2]
+    dist = locations2degrees(lat1=lat, long1=lon, lat2=hypo_lat, long2=hypo_lon)
+    azimuth = gps2dist_azimuth(lat1=lat, lon1=lon, lat2=hypo_lat, lon2=hypo_lon)[2]
     for st in [*lst, st_obs0]:
         for tr in st:
             tr.stats.back_azimuth = azimuth

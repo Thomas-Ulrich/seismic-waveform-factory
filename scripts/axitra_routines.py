@@ -11,11 +11,11 @@ from scipy.signal import fftconvolve
 from tqdm import tqdm
 
 
-def create_axitra_station_file(list_inventory):
-    stations_array_axitra = np.zeros((len(list_inventory), 4))
-    for ins, inv in enumerate(list_inventory):
-        sta = inv[0][0]
-        stations_array_axitra[ins, :] = [ins + 1, sta.latitude, sta.longitude, 0]
+def create_axitra_station_file(station_coords):
+    stations_array_axitra = np.zeros((len(station_coords), 4))
+    for ins, station_code in enumerate(station_coords):
+        lon, lat = station_coords[station_code]
+        stations_array_axitra[ins, :] = [ins + 1, lat, lon, 0]
     return stations_array_axitra
 
 
@@ -99,16 +99,17 @@ def generate_synthetics_from_axitra_green_functions(
     return dt_axitra, synth * dt_axitra * 0.5 * 0.01
 
 
-def create_synthetic_stream(starttime, dt, list_inventory, synth):
+def create_synthetic_stream(starttime, dt, station_coords, synth):
     st_syn = read()
     st_syn.clear()
     xyz = "NEZ"
-    nsta = len(list_inventory)
-    for ista, sta in enumerate(list_inventory):
+    nsta = len(station_coords)
+    for ista, code in enumerate(station_coords):
+        net, sta = code.split(".")
         for i in range(0, 3):
             tr = Trace()
-            tr.stats.network = sta[0].code
-            tr.stats.station = sta[0][0].code
+            tr.stats.network = net
+            tr.stats.station = sta
             tr.stats.channel = xyz[i]
             tr.data = synth[i * nsta + ista, :]
             tr.stats.delta = dt
@@ -119,7 +120,7 @@ def create_synthetic_stream(starttime, dt, list_inventory, synth):
 
 def generate_synthetics_axitra(
     source_files,
-    list_inventory,
+    station_coords,
     onset,
     kind_vd,
     fmax,
@@ -128,12 +129,12 @@ def generate_synthetics_axitra(
     path_axitra,
 ):
     lst = []
-    nsta = len(list_inventory)
+    nsta = len(station_coords)
 
     for fname in tqdm(source_files):
         # because of ap.clean, model and station_array_axitra need to be rewritten
         model = np.loadtxt(vel_model_fname, comments="#")
-        stations_array_axitra = create_axitra_station_file(list_inventory)
+        stations_array_axitra = create_axitra_station_file(station_coords)
         sources, hist, dt_stf, stf = create_axitra_source_from_h5(fname)
         latlon = False
         if not latlon:
@@ -163,7 +164,7 @@ def generate_synthetics_axitra(
         dt_axitra, synth = generate_synthetics_from_axitra_green_functions(
             ap, dt_stf, stf, hist, nsta, kind_vd
         )
-        st_syn = create_synthetic_stream(onset, dt_axitra, list_inventory, synth)
+        st_syn = create_synthetic_stream(onset, dt_axitra, station_coords, synth)
         lst.append(st_syn)
         ap.clean()
     return lst

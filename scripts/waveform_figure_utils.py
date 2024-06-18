@@ -70,22 +70,30 @@ def compile_list_inventories(client_name, station_codes, t1):
     return list_inventory
 
 
-def reorder_station_using_azimuth(list_inventory, hypo_lon, hypo_lat):
-    # Reorder station based on azimuth
-    d_azimuth = {}
+def compile_station_coords(list_inventory):
+    station_coords = {}
     for ins, inv in enumerate(list_inventory):
         sta = inv[0][0]
-        d_azimuth[ins] = gps2dist_azimuth(
-            lat1=sta.latitude, lon1=sta.longitude, lat2=hypo_lat, lon2=hypo_lon
+        code = f"{inv[0].code}.{sta.code}"
+        station_coords[code] = (sta.longitude, sta.latitude)
+    return station_coords
+
+
+def reorder_station_coords_from_azimuth(station_coords, hypo_lon, hypo_lat):
+    # Reorder station based on azimuth
+    d_azimuth = {}
+    for code, lonlat in station_coords.items():
+        longitude, latitude = lonlat
+        d_azimuth[code] = gps2dist_azimuth(
+            lat1=latitude, lon1=longitude, lat2=hypo_lat, lon2=hypo_lon
         )[2]
     ordered_azimuth = {
         k: v for k, v in sorted(d_azimuth.items(), key=lambda item: item[1])
     }
-    list_inventory2 = list_inventory.copy()
-    list_inventory = []
+    reordered_station_coords = {}
     for key in ordered_azimuth:
-        list_inventory.append(list_inventory2[key])
-    return list_inventory
+        reordered_station_coords[key] = station_coords[key]
+    return reordered_station_coords
 
 
 def estimate_travel_time(source_depth_in_km, distance_in_degree, station, phase="P"):

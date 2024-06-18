@@ -105,7 +105,7 @@ class ProgressBar(tqdm):
 def generate_synthetics_instaseis(
     db_name,
     source_files,
-    list_inventory,
+    station_coords,
     t1,
     kind_vd,
     components,
@@ -128,21 +128,20 @@ def generate_synthetics_instaseis(
 
     n_point_sources = [len(sources.pointsources) for sources in list_finite_sources]
     n_total_point_sources = sum(n_point_sources)
-    nstations = len(list_inventory)
+    nstations = len(station_coords)
     lst = []
     for iModel, sources in enumerate(list_finite_sources):
         lst.append(Stream())
 
     with ProgressBar(nstations * n_total_point_sources) as progress_bar:
-        for ins, inv in enumerate(list_inventory):
-            sta = inv[0][0]
-            network = inv[0].code
-            station = sta.code
+        for station_code in station_coords:
+            lon, lat = station_coords[station_code]
+            network, station = station_code.split(".")
 
             # create synthetic data with instaseis
             receiver = instaseis.Receiver(
-                latitude=geographic2geocentric(sta.latitude),
-                longitude=sta.longitude,
+                latitude=geographic2geocentric(lat),
+                longitude=lon,
                 network=network,
                 station=station,
             )

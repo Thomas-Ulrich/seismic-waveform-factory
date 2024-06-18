@@ -13,22 +13,21 @@ from tqdm import tqdm
 import os
 
 
-def create_pyprop8_receivers(list_inventory, transformer):
-    station_coords = np.zeros((len(list_inventory), 2))
-    for ins, inv in enumerate(list_inventory):
-        sta = inv[0][0]
-        station_coords[ins, :] = [sta.longitude, sta.latitude]
+def create_pyprop8_receivers(station_coords, transformer):
+    station_coords_np = np.zeros((len(station_coords), 2))
+    for ins, station_code in enumerate(station_coords):
+        station_coords_np[ins, :] = station_coords[station_code]
     if transformer:
-        station_coords[:, 0], station_coords[:, 1] = transformer.transform(
-            station_coords[:, 0], station_coords[:, 1]
+        station_coords_np[:, 0], station_coords_np[:, 1] = transformer.transform(
+            station_coords_np[:, 0], station_coords_np[:, 1]
         )
-        station_coords[:, :] /= 1000.0
+        station_coords_np[:, :] /= 1000.0
         geometry = "cartesian"
     else:
         geometry = "spherical"
-    print(f"receivers ({geometry})", station_coords)
+    print(f"receivers ({geometry})", station_coords_np)
     receivers = pp.ListOfReceivers(
-        station_coords[:, 0], station_coords[:, 1], 0, geometry=geometry
+        station_coords_np[:, 0], station_coords_np[:, 1], 0, geometry=geometry
     )
     return receivers
 
@@ -134,16 +133,17 @@ def generate_synthetics(
     return dt, synth
 
 
-def create_synthetic_stream(starttime, dt, list_inventory, synth):
+def create_synthetic_stream(starttime, dt, station_coords, synth):
     st_syn = read()
     st_syn.clear()
     xyz = "ENZ"
-    nsta = len(list_inventory)
-    for ista, sta in enumerate(list_inventory):
+    nsta = len(station_coords)
+    for ista, code in enumerate(station_coords):
+        net, sta = code.split(".")
         for i in range(0, 3):
             tr = Trace()
-            tr.stats.network = sta[0].code
-            tr.stats.station = sta[0][0].code
+            tr.stats.network = net
+            tr.stats.station = sta
             tr.stats.channel = xyz[i]
             tr.data = synth[i * nsta + ista, :]
             tr.stats.delta = dt
@@ -154,7 +154,7 @@ def create_synthetic_stream(starttime, dt, list_inventory, synth):
 
 def generate_synthetics_pyprop8(
     source_files,
-    list_inventory,
+    station_coords,
     onset,
     kind_vd,
     fmax,
@@ -169,14 +169,14 @@ def generate_synthetics_pyprop8(
         model_axitra_fmt[-1, 0] = np.inf
     model = pp.LayeredStructureModel(model_axitra_fmt)
     print(model)
-    nreceivers = len(list_inventory)
+    nreceivers = len(station_coords)
 
     for fname in source_files:
         transformer, lsources, dt_stf, stf = create_pyprop8_source_list_from_h5(fname)
-        receivers = create_pyprop8_receivers(list_inventory, transformer)
+        receivers = create_pyprop8_receivers(station_coords, transformer)
         dt, synth = generate_synthetics(
             dt_stf, stf, nreceivers, kind_vd, model, lsources, receivers, fmax, duration
         )
-        st_syn = create_synthetic_stream(onset, dt, list_inventory, synth)
+        st_syn = create_synthetic_stream(onset, dt, station_coords, synth)
         lst.append(st_syn)
     return lst
