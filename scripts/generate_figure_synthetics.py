@@ -19,7 +19,6 @@ from waveform_figure_utils import (
 from itertools import cycle
 import pickle
 import glob
-from warnings import warn
 
 parser = argparse.ArgumentParser(
     description=(
@@ -132,11 +131,15 @@ surface_waves_components = config.get("SURFACE_WAVES", "components").split(",")
 
 
 processed_waveforms = config.get("GENERAL", "processed_waveforms", fallback=None)
-station_file = config.get("GENERAL", "station_file", fallback=None)
 
 if processed_waveforms:
+    pr_wf_kind = config.get("GENERAL", "processed_waveforms_kind")
+    pr_wf_factor = config.getfloat(
+        "GENERAL", "processed_waveforms_factor", fallback=1.0
+    )
     processed_station_files = get_station_files_dict(processed_waveforms)
 
+station_file = config.get("GENERAL", "station_file", fallback=None)
 station_coords = compile_station_coords_main(
     station_codes, station_file, client_name, t1
 )
@@ -279,11 +282,13 @@ for ins, station_code in enumerate(station_coords):
     if processed_waveforms:
         if code in processed_station_files:
             st_obs0 = read(processed_station_files[code])
-            warn("hardcoded 0.01 factor and integration")
-            # scale to m/s
+            dict_kind = {"acceleration": 0, "velocity": 1, "displacement": 2}
+            number_diff = dict_kind[kind_vd] - dict_kind[pr_wf_kind]
+            operation = st_obs0.integrate if number_diff > 0 else st_obs0.differentiate
+            for _ in range(abs(number_diff)):
+                operation()
             for tr in st_obs0:
-                tr.data *= 0.01
-            st_obs0.integrate()
+                tr.data *= pr_wf_factor
     if not st_obs0:
         retrieved_waveforms = retrieve_waveforms(
             network_station, client_name, kind_vd, path_observations, starttime, endtime
