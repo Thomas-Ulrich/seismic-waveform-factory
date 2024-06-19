@@ -36,6 +36,7 @@ config.read(args.config_file)
 setup_name = config.get("GENERAL", "setup_name")
 ext = config.get("GENERAL", "figure_extension")
 font_size = config.get("GENERAL", "font_size")
+relative_offset = config.getfloat("GENERAL", "relative_offset", fallback=0.0)
 projection = config.get("GENERAL", "projection", fallback=None)
 
 source_files = config.get("GENERAL", "source_files").split(",")
@@ -88,6 +89,8 @@ if seissol_outputs:
 
 hypo_lon = config.getfloat("GENERAL", "hypo_lon")
 hypo_lat = config.getfloat("GENERAL", "hypo_lat")
+scaling = config.getfloat("GENERAL", "scaling", fallback=1.0)
+
 hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
 station_codes_list = config.get("GENERAL", "stations")
 station_codes = [v.strip() for v in station_codes_list.split(",")]
@@ -162,6 +165,8 @@ Pwave = WaveformFigureGenerator(
     n_software * n_kinematic_models,
     kind_misfit,
     colors,
+    scaling,
+    relative_offset,
 )
 SHwave = WaveformFigureGenerator(
     "SH",
@@ -176,6 +181,8 @@ SHwave = WaveformFigureGenerator(
     n_software * n_kinematic_models,
     kind_misfit,
     colors,
+    scaling,
+    relative_offset,
 )
 surface_waves = WaveformFigureGenerator(
     "surface_waves",
@@ -190,6 +197,8 @@ surface_waves = WaveformFigureGenerator(
     n_software * n_kinematic_models,
     kind_misfit,
     colors,
+    scaling,
+    relative_offset,
 )
 
 

@@ -60,6 +60,8 @@ class WaveformFigureGenerator:
         n_kinematic_models,
         kind_misfit,
         colors,
+        scaling,
+        relative_offset,
     ):
         self.components = components
         self.signal_kind = signal_kind
@@ -80,8 +82,9 @@ class WaveformFigureGenerator:
         ]
         self.kind_misfit = kind_misfit
         self.init_gof_pandas_df()
-        self.scaling = 1e3
+        self.scaling = scaling
         self.colors = colors
+        self.relative_offset = relative_offset
 
     def init_gof_pandas_df(self):
         columns = ["station", "distance", "azimuth"]
@@ -131,6 +134,29 @@ class WaveformFigureGenerator:
                     axi.set_yticks([])
         self.fig, self.axarr = fig, axarr
 
+    def compute_max_abs_value(self, streams):
+        max_abs_value = float("-inf")
+        for stream in streams:
+            for comp in self.components:
+                trace = stream.select(component=comp)[0]
+                times = trace.times()
+                data = trace.data
+
+                mask = (times >= self.t_before) & (times <= self.t_after)
+                filtered_data = data[mask]
+
+                if filtered_data.size > 0:
+                    max_abs_value = max(
+                        max_abs_value, np.max(filtered_data), -np.min(filtered_data)
+                    )
+        if max_abs_value == float("-inf"):
+            print(
+                "No data points found in the specified time range for the specified components."
+            )
+            return 0.0
+        else:
+            return max_abs_value
+
     def add_plot_station(self, st_obs0, lst, reftime, ista):
         network = st_obs0[0].stats.network
         station = st_obs0[0].stats.station
@@ -152,6 +178,7 @@ class WaveformFigureGenerator:
                 corners=4,
                 zerophase=True,
             )
+        offset = self.compute_max_abs_value([*lst_copy, st_obs]) * self.relative_offset
 
         nrows = self.axarr.shape[0]
         ins = ista % nrows
@@ -172,7 +199,7 @@ class WaveformFigureGenerator:
                 strace = st.select(component=comp)[0]
                 self.axarr[ins, j0].plot(
                     strace.times(reftime=reftime),
-                    self.scaling * strace.data,
+                    self.scaling * strace.data + (ist + 1) * offset,
                     self.colors[ist],
                 )
             otrace = st_obs.select(component=comp)[0]
