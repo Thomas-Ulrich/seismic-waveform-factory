@@ -37,6 +37,10 @@ setup_name = config.get("GENERAL", "setup_name")
 ext = config.get("GENERAL", "figure_extension")
 font_size = config.get("GENERAL", "font_size")
 relative_offset = config.getfloat("GENERAL", "relative_offset", fallback=0.0)
+annotations = config.get(
+    "GENERAL", "annotations", fallback="distance,azimuth,misfit"
+).split(",")
+
 projection = config.get("GENERAL", "projection", fallback=None)
 
 source_files = config.get("GENERAL", "source_files").split(",")
@@ -167,6 +171,7 @@ Pwave = WaveformFigureGenerator(
     colors,
     scaling,
     relative_offset,
+    annotations,
 )
 SHwave = WaveformFigureGenerator(
     "SH",
@@ -183,6 +188,7 @@ SHwave = WaveformFigureGenerator(
     colors,
     scaling,
     relative_offset,
+    annotations,
 )
 surface_waves = WaveformFigureGenerator(
     "surface_waves",
@@ -199,6 +205,7 @@ surface_waves = WaveformFigureGenerator(
     colors,
     scaling,
     relative_offset,
+    annotations,
 )
 
 

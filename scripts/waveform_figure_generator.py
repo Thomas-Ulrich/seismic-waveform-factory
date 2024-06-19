@@ -62,6 +62,7 @@ class WaveformFigureGenerator:
         colors,
         scaling,
         relative_offset,
+        annotations,
     ):
         self.components = components
         self.signal_kind = signal_kind
@@ -85,6 +86,7 @@ class WaveformFigureGenerator:
         self.scaling = scaling
         self.colors = colors
         self.relative_offset = relative_offset
+        self.annotations = annotations
 
     def init_gof_pandas_df(self):
         columns = ["station", "distance", "azimuth"]
@@ -219,22 +221,33 @@ class WaveformFigureGenerator:
         for j, comp in enumerate(self.components):
             j0 = compute_j0(j)
             ymin0, ymax0 = self.axarr[ins, j0].get_ylim()
-            gofstring = ""
-            annot = ""
+            gofstrings = []
+            annot = []
+
             for ist, myst in enumerate(lst_copy):
                 try:
                     gof, y0 = self.compute_misfit(myst, st_obs, comp, reftime)
                 except ValueError:
                     gof, y0 = 0, 0
                 temp_dic[f"{self.signal_kind}_{comp}{ist}"] = gof
-                gofstring += f"{gof:.2f} "
+                if "misfit" in self.annotations:
+                    gofstrings += [f"{gof:.2f}"]
                 if j == 0 and ist == n_kinematic_models - 1:
-                    annot += f"d:{dist:.0f}° a:{azimuth:.0f}°\n{gofstring}"
-                elif ist == n_kinematic_models - 1:
-                    annot += f"{gofstring}"
+                    if "distance" in self.annotations:
+                        annot += [f"d:{dist:.0f}°"]
+                    if "azimuth" in self.annotations:
+                        annot += [f"a:{azimuth:.0f}°"]
+                if ist == n_kinematic_models - 1:
+                    if "misfit" in self.annotations:
+                        gofstring = "\n" + " ".join(gofstrings)
+                        annot += [f"{gofstring}"]
+                annot = " ".join(annot)
                 loc = "upper" if (y0 - ymin0) / (ymax0 - ymin0) < 0.5 else "lower"
-                anchored_text = AnchoredText(annot, loc=loc + " left", frameon=False)
-                self.axarr[ins, j0].add_artist(anchored_text)
+                if len(annot):
+                    anchored_text = AnchoredText(
+                        annot, loc=loc + " left", frameon=False
+                    )
+                    self.axarr[ins, j0].add_artist(anchored_text)
 
         # compute average gof if several components
         if len(self.components) > 1:
