@@ -9,6 +9,7 @@ import gzip
 import pickle
 import os
 
+
 def get_station_name_from_mseed(file_path):
     try:
         stream = read(file_path)
@@ -19,6 +20,7 @@ def get_station_name_from_mseed(file_path):
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
         return None
+
 
 def get_station_files_dict(directory):
     station_files = {}
@@ -31,6 +33,7 @@ def get_station_files_dict(directory):
     nfiles = len(station_files)
     print(f"found {nfiles} waveforms in {directory}")
     return station_files
+
 
 def compile_station_coords_csv(station_codes, station_file):
     if os.path.exists(station_file):
@@ -46,6 +49,7 @@ def compile_station_coords_csv(station_codes, station_file):
             f"{row['network']}.{row['station']}": (row["lon"], row["lat"])
             for _, row in df.iterrows()
         }
+
 
 def extract_station_coords_from_dict(station_codes, station_coords_all, station_file):
     station_coords = {}

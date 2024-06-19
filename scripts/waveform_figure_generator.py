@@ -167,15 +167,17 @@ class WaveformFigureGenerator:
             return max_abs_value
 
     def compute_scaling(self, trace, reftime):
+        annot = ""
         if self.normalize:
             stmax = self.compute_max_abs_value_trace(trace, reftime)
+            annot = f"{stmax:.2}"
             if stmax <= 0:
                 stmax = 1.0
             scaling = 1 / stmax if stmax != 0.0 else 1.0
         else:
             scaling = 1.0
         scaling *= self.scaling
-        return scaling
+        return scaling, annot
 
     def add_plot_station(self, st_obs0, lst, reftime, ista):
         network = st_obs0[0].stats.network
@@ -220,10 +222,11 @@ class WaveformFigureGenerator:
             j0 = compute_j0(j)
             if self.signal_kind in ["P", "SH"]:
                 self.axarr[ins, j0].set_ylabel(ylabel)
-
+            vmax_annot = []
             for ist, st in enumerate(lst_copy):
                 strace = st.select(component=comp)[0]
-                scaling = self.compute_scaling(strace, reftime)
+                scaling, annot = self.compute_scaling(strace, reftime)
+                vmax_annot.append(annot)
 
                 self.axarr[ins, j0].plot(
                     strace.times(reftime=reftime),
@@ -232,7 +235,8 @@ class WaveformFigureGenerator:
                     linewidth=self.line_widths[ist],
                 )
             otrace = st_obs.select(component=comp)[0]
-            scaling = self.compute_scaling(otrace, reftime)
+            scaling, annot = self.compute_scaling(otrace, reftime)
+            vmax_annot.append(annot)
             self.axarr[ins, j0].plot(
                 otrace.times(reftime=reftime),
                 scaling * otrace.data,
@@ -272,11 +276,13 @@ class WaveformFigureGenerator:
                     if "misfit" in self.annotations:
                         gofstring = "\n" + " ".join(gofstrings)
                         annot += [f"{gofstring}"]
-                annot = " ".join(annot)
+                    if self.normalize:
+                        annot += ["\n".join(vmax_annot)]
+                annotations = " ".join(annot)
                 loc = "upper" if (y0 - ymin0) / (ymax0 - ymin0) < 0.5 else "lower"
                 if len(annot):
                     anchored_text = AnchoredText(
-                        annot, loc=loc + " left", frameon=False
+                        annotations, loc=loc + " left", frameon=False
                     )
                     self.axarr[ins, j0].add_artist(anchored_text)
 
