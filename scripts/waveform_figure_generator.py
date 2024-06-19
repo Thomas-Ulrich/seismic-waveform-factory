@@ -223,6 +223,7 @@ class WaveformFigureGenerator:
             if self.signal_kind in ["P", "SH"]:
                 self.axarr[ins, j0].set_ylabel(ylabel)
             vmax_annot = []
+            nst = len(lst_copy) + 1
             for ist, st in enumerate(lst_copy):
                 strace = st.select(component=comp)[0]
                 scaling, annot = self.compute_scaling(strace, reftime)
@@ -230,7 +231,7 @@ class WaveformFigureGenerator:
 
                 self.axarr[ins, j0].plot(
                     strace.times(reftime=reftime),
-                    scaling * strace.data + (ist + 1) * offset,
+                    scaling * strace.data + (nst - ist - 1) * offset,
                     self.colors[ist],
                     linewidth=self.line_widths[ist],
                 )
