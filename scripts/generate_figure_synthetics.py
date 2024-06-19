@@ -94,11 +94,13 @@ if seissol_outputs:
 hypo_lon = config.getfloat("GENERAL", "hypo_lon")
 hypo_lat = config.getfloat("GENERAL", "hypo_lat")
 scaling = config.getfloat("GENERAL", "scaling", fallback=1.0)
+normalize = config.getboolean("GENERAL", "normalize", fallback=False)
 
 hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
 station_codes_list = config.get("GENERAL", "stations")
 station_codes = [v.strip() for v in station_codes_list.split(",")]
 colors = config.get("GENERAL", "line_colors").split(",")
+line_widths = [float(v) for v in config.get("GENERAL", "line_widths").split(",")]
 ncolors = len(colors)
 if ncolors < len(source_files):
     print("enhancing line_colors as not enough colors specified")
@@ -169,7 +171,9 @@ Pwave = WaveformFigureGenerator(
     n_software * n_kinematic_models,
     kind_misfit,
     colors,
+    line_widths,
     scaling,
+    normalize,
     relative_offset,
     annotations,
 )
@@ -186,7 +190,9 @@ SHwave = WaveformFigureGenerator(
     n_software * n_kinematic_models,
     kind_misfit,
     colors,
+    line_widths,
     scaling,
+    normalize,
     relative_offset,
     annotations,
 )
@@ -203,7 +209,9 @@ surface_waves = WaveformFigureGenerator(
     n_software * n_kinematic_models,
     kind_misfit,
     colors,
+    line_widths,
     scaling,
+    normalize,
     relative_offset,
     annotations,
 )

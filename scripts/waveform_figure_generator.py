@@ -60,7 +60,9 @@ class WaveformFigureGenerator:
         n_kinematic_models,
         kind_misfit,
         colors,
+        line_widths,
         scaling,
+        normalize,
         relative_offset,
         annotations,
     ):
@@ -73,6 +75,7 @@ class WaveformFigureGenerator:
         self.enabled = enabled
         self.ncol_per_component = ncol_per_component
         self.ncomp = len(self.components)
+        self.normalize = normalize
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
         assert kind_misfit in [
@@ -85,6 +88,7 @@ class WaveformFigureGenerator:
         self.init_gof_pandas_df()
         self.scaling = scaling
         self.colors = colors
+        self.line_widths = line_widths
         self.relative_offset = relative_offset
         self.annotations = annotations
 
@@ -120,6 +124,8 @@ class WaveformFigureGenerator:
         for j in range(ncol):
             for i in range(nrow):
                 axi = axarr[i, j]
+                if self.normalize:
+                    axi.set_yticks([])
                 if j > 0 and surface_waves_signa_plot:
                     axi.set_yticks([])
                     axi.spines["left"].set_visible(False)
@@ -136,21 +142,22 @@ class WaveformFigureGenerator:
                     axi.set_yticks([])
         self.fig, self.axarr = fig, axarr
 
-    def compute_max_abs_value(self, streams):
+    def compute_max_abs_value_trace(self, trace, reftime):
+        max_abs_value = float("-inf")
+        times = trace.times(reftime=reftime)
+        mask = (times >= self.t_before) & (times <= self.t_after)
+        filtered_data = trace.data[mask]
+        if filtered_data.size > 0:
+            max_abs_value = max(np.max(filtered_data), -np.min(filtered_data))
+        return max_abs_value
+
+    def compute_max_abs_value(self, streams, reftime):
         max_abs_value = float("-inf")
         for stream in streams:
             for comp in self.components:
                 trace = stream.select(component=comp)[0]
-                times = trace.times()
-                data = trace.data
-
-                mask = (times >= self.t_before) & (times <= self.t_after)
-                filtered_data = data[mask]
-
-                if filtered_data.size > 0:
-                    max_abs_value = max(
-                        max_abs_value, np.max(filtered_data), -np.min(filtered_data)
-                    )
+                max_trace = self.compute_max_abs_value_trace(trace, reftime)
+                max_abs_value = max(max_abs_value, max_trace)
         if max_abs_value == float("-inf"):
             print(
                 "No data points found in the specified time range for the specified components."
@@ -158,6 +165,17 @@ class WaveformFigureGenerator:
             return 0.0
         else:
             return max_abs_value
+
+    def compute_scaling(self, trace, reftime):
+        if self.normalize:
+            stmax = self.compute_max_abs_value_trace(trace, reftime)
+            if stmax <= 0:
+                stmax = 1.0
+            scaling = 1 / stmax if stmax != 0.0 else 1.0
+        else:
+            scaling = 1.0
+        scaling *= self.scaling
+        return scaling
 
     def add_plot_station(self, st_obs0, lst, reftime, ista):
         network = st_obs0[0].stats.network
@@ -180,7 +198,13 @@ class WaveformFigureGenerator:
                 corners=4,
                 zerophase=True,
             )
-        offset = self.compute_max_abs_value([*lst_copy, st_obs]) * self.relative_offset
+        if self.normalize:
+            offset = self.relative_offset
+        else:
+            offset = (
+                self.compute_max_abs_value([*lst_copy, st_obs], reftime)
+                * self.relative_offset
+            )
 
         nrows = self.axarr.shape[0]
         ins = ista % nrows
@@ -199,14 +223,21 @@ class WaveformFigureGenerator:
 
             for ist, st in enumerate(lst_copy):
                 strace = st.select(component=comp)[0]
+                scaling = self.compute_scaling(strace, reftime)
+
                 self.axarr[ins, j0].plot(
                     strace.times(reftime=reftime),
-                    self.scaling * strace.data + (ist + 1) * offset,
+                    scaling * strace.data + (ist + 1) * offset,
                     self.colors[ist],
+                    linewidth=self.line_widths[ist],
                 )
             otrace = st_obs.select(component=comp)[0]
+            scaling = self.compute_scaling(otrace, reftime)
             self.axarr[ins, j0].plot(
-                otrace.times(reftime=reftime), self.scaling * otrace.data, "k"
+                otrace.times(reftime=reftime),
+                scaling * otrace.data,
+                "k",
+                linewidth=self.line_widths[ist],
             )
             self.axarr[ins, j0].set_xlim([self.t_before, self.t_after])
             # rescale to view range
