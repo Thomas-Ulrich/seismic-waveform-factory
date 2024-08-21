@@ -25,7 +25,7 @@ def compute_rigidity(muDescription, muValue, coords):
         print(f"loading 1D velocity file (Sumatra model): {muValue}")
         depthmu = np.loadtxt(muValue)
         depthmu = depthmu[depthmu[:, 0].argsort()]
-        print(depthmu)
+        #print(depthmu)
         y1, y2 = 250000, 1550000
         alpha = np.maximum(0.0, np.minimum(1.0, (coords[:, 1] - y1) / (y2 - y1)))
         depth_seafloor = -5000.0 + 2000.0 * alpha
