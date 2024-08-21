@@ -140,9 +140,9 @@ def write_point_source_file(fname, point_sources, dt, proj):
         h5f["FaultTags"][:] = FaultTags
 
         if proj:
-            h5f.attrs["CoordinatesConvention"] = np.string_("geographic")
+            h5f.attrs["CoordinatesConvention"] = np.bytes_("geographic")
         else:
-            h5f.attrs["CoordinatesConvention"] = np.string_("projected")
+            h5f.attrs["CoordinatesConvention"] = np.bytes_("projected")
     print(f"done writing {fname}")
 
 
