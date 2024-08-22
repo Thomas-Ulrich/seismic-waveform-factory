@@ -101,12 +101,22 @@ station_codes_list = config.get("GENERAL", "stations")
 station_codes = [v.strip() for v in station_codes_list.split(",")]
 colors = config.get("GENERAL", "line_colors").split(",")
 line_widths = [float(v) for v in config.get("GENERAL", "line_widths").split(",")]
-ncolors = len(colors)
-if ncolors < len(source_files):
-    print("enhancing line_colors as not enough colors specified")
-    cycol = cycle(colors)
-    for i in range(ncolors, len(source_files)):
-        colors.append(next(cycol))
+
+
+def extend_if_necessary(colors, n, name):
+    ncolors = len(colors)
+    if ncolors < n:
+        print("enhancing line {name} as not enough specified")
+        cycol = cycle(colors)
+        for i in range(ncolors, n):
+            colors.append(next(cycol))
+    return colors
+
+
+n = len(source_files)
+colors = extend_if_necessary(colors, n, "colors")
+line_widths = extend_if_necessary(line_widths, n, "line_widths")
+
 
 path_observations = config.get("GENERAL", "path_observations")
 kind_misfit = config.get("GENERAL", "Misfit", fallback="rRMS")
