@@ -106,7 +106,7 @@ line_widths = [float(v) for v in config.get("GENERAL", "line_widths").split(",")
 def extend_if_necessary(colors, n, name):
     ncolors = len(colors)
     if ncolors < n:
-        print("enhancing line {name} as not enough specified")
+        print(f"enhancing line {name} as not enough specified")
         cycol = cycle(colors)
         for i in range(ncolors, n):
             colors.append(next(cycol))
