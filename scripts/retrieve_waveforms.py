@@ -120,7 +120,7 @@ def get_pre_filt(selected_band):
 
 
 def select_band(channels):
-    priorities = ["H", "B", "M", "L"]
+    priorities = ["H", "B", "E", "M", "L"]
     for band in priorities:
         if any(channel.startswith(band) for channel in channels):
             if any(channel.startswith(band + "H") for channel in channels):

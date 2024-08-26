@@ -116,7 +116,7 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
 
     if not os.path.exists("plots"):
         os.makedirs("plots")
-    fn = f"plots/{setup_name}teleseismic_station_map.svg"
+    fn = f"plots/{setup_name}_station_map.svg"
     plt.savefig(fn, bbox_inches="tight")
     print(f"done writing {fn}")
 
