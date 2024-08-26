@@ -135,7 +135,7 @@ def select_band(channels):
 def retrieve_waveforms(
     network_station, client_name, kind_vd, path_observations, t1, t2
 ):
-    if client_name == "eida-routing":
+    if client_name in ["eida-routing", "iris-federator"]:
         client = RoutingClient(client_name)
         is_routing_client = True
         level = "response"
