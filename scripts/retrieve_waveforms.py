@@ -1,6 +1,6 @@
 from obspy import read
 from lxml.etree import XMLSyntaxError
-from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.clients.fdsn.header import FDSNNoDataException, FDSNException
 from obspy.clients.fdsn import Client, RoutingClient
 from obspy.core.inventory import Inventory
 import gzip
@@ -9,7 +9,12 @@ import os
 
 def get_level_station_wise(client, network, stations, level, t1):
     inv = Inventory()
-    exceptions_to_catch = (FDSNNoDataException, XMLSyntaxError, gzip.BadGzipFile)
+    exceptions_to_catch = (
+        FDSNException,
+        FDSNNoDataException,
+        XMLSyntaxError,
+        gzip.BadGzipFile,
+    )
 
     for station in stations:
         max_retries = 5
@@ -74,7 +79,12 @@ def get_waveforms(
     client, network, station, selected_band, t1, t2, is_routing_client=False
 ):
     max_retries = 5
-    exceptions_to_catch = (FDSNNoDataException, XMLSyntaxError)
+    exceptions_to_catch = (
+        FDSNException,
+        FDSNNoDataException,
+        XMLSyntaxError,
+        gzip.BadGzipFile,
+    )
     st_obs0 = False
 
     if is_routing_client:
@@ -182,7 +192,6 @@ def retrieve_waveforms(
             if not selected_band:
                 print(f"{station.code} does not have the expected channels: {channels}")
                 continue
-
             st_obs0 = get_waveforms(
                 client, network, station, selected_band, t1, t2, is_routing_client
             )
