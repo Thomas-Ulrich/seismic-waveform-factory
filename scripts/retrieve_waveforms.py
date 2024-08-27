@@ -2,6 +2,7 @@ from obspy import read
 from lxml.etree import XMLSyntaxError
 from obspy.clients.fdsn.header import FDSNNoDataException, FDSNException
 from obspy.clients.fdsn import Client, RoutingClient
+from requests.exceptions import ConnectionError
 from obspy.core.inventory import Inventory
 import gzip
 import os
@@ -14,10 +15,12 @@ def get_level_station_wise(client, network, stations, level, t1):
         FDSNNoDataException,
         XMLSyntaxError,
         gzip.BadGzipFile,
+        ConnectionError,
     )
 
     for station in stations:
         max_retries = 5
+
         for retry_count in range(max_retries):
             try:
                 if retry_count == 0:
@@ -49,8 +52,13 @@ def get_level_station_wise(client, network, stations, level, t1):
 def get_level_network_wise(client, network, stations, level, t1):
     max_retries = 5
     inv = Inventory()
-    exceptions_to_catch = (FDSNNoDataException, XMLSyntaxError, gzip.BadGzipFile)
-
+    exceptions_to_catch = (
+        FDSNException,
+        FDSNNoDataException,
+        XMLSyntaxError,
+        gzip.BadGzipFile,
+        ConnectionError,
+    )
     for retry_count in range(max_retries):
         try:
             if retry_count == 0:
@@ -84,6 +92,7 @@ def get_waveforms(
         FDSNNoDataException,
         XMLSyntaxError,
         gzip.BadGzipFile,
+        ConnectionError,
     )
     st_obs0 = False
 
@@ -103,6 +112,7 @@ def get_waveforms(
                 endtime=t2,
                 **kwargs,
             )
+            st_obs0.merge()
             if not st_obs0:
                 print(f"Got empty stream for {network} {station.code}")
             break

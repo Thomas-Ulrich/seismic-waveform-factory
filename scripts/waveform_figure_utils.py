@@ -104,7 +104,7 @@ def compile_list_inventories(client_name, station_codes, t1):
     retry_count = 0
     while retry_count < max_retries:
         try:
-            if client_name == "eida-routing":
+            if client_name in ["eida-routing", "iris-federator"]:
                 c = RoutingClient(client_name)
             else:
                 c = Client(client_name)
