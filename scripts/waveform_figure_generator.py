@@ -224,6 +224,8 @@ class WaveformFigureGenerator:
                 self.axarr[ins, j0].set_ylabel(ylabel)
             vmax_annot = []
             nst = len(lst_copy) + 1
+            # initialize ist if no synthetics
+            ist = 0
             for ist, st in enumerate(lst_copy):
                 strace = st.select(component=comp)[0]
                 scaling, annot = self.compute_scaling(strace, reftime)

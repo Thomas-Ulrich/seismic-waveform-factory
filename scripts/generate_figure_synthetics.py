@@ -73,11 +73,12 @@ kind_vd = config.get("GENERAL", "kind")
 
 software = config.get("GENERAL", "software").split(",")
 n_software = len(software)
+prefix = f"plots/{setup_name}_{kind_vd}"
 if "instaseis" in software:
     from instaseis_routines import generate_synthetics_instaseis
 
     db_name = config.get("GENERAL", "db")
-    prefix = f"plots/{setup_name}_{kind_vd}_instaseis"
+    prefix = f"{prefix}_instaseis"
 
 if ("axitra" in software) or ("pyprop8" in software):
     fmax = config.getfloat("GENERAL", "axitra_pyprop8_fmax")
@@ -85,10 +86,10 @@ if ("axitra" in software) or ("pyprop8" in software):
     velocity_model_fname = config.get("GENERAL", "axitra_pyprop8_velocity_model")
     if "axitra" in software:
         path2axitra = config.get("GENERAL", "axitra_path")
-    prefix = f"plots/{setup_name}_{kind_vd}_{fmax}Hz_{duration}s"
+    prefix = f"{prefix}_{fmax}Hz_{duration}s"
 
 if seissol_outputs:
-    prefix = f"plots/{setup_name}_{kind_vd}_seissol"
+    prefix = f"{prefix}_{kind_vd}_seissol"
 
 
 hypo_lon = config.getfloat("GENERAL", "hypo_lon")
@@ -236,6 +237,7 @@ if Pwave_enabled and not (SHwave_enabled or surface_waves_enabled):
 gofall = [0 for i in range(len(source_files))]
 
 list_synthetics_all = []
+t_obs_before, t_obs_after = 100, 400
 
 if seissol_outputs:
     t_obs_before, t_obs_after = 100, 400
