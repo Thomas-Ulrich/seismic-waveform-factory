@@ -8,7 +8,7 @@ import gzip
 import os
 
 
-def get_level_station_wise(client, network, stations, level, t1):
+def get_station_data(client, network, stations, level, t1, network_wise=True):
     inv = Inventory()
     exceptions_to_catch = (
         FDSNException,
@@ -18,68 +18,36 @@ def get_level_station_wise(client, network, stations, level, t1):
         ConnectionError,
     )
 
-    for station in stations:
+    if network_wise:
+        station_param = [",".join(stations)]
+    else:
+        station_param = stations
+    for station in station_param:
+        retry_message = f"network {network} at station(s) {station}"
         max_retries = 5
-
         for retry_count in range(max_retries):
             try:
                 if retry_count == 0:
-                    print(
-                        f"Getting {level}s for network {network} and station {station}..."
-                    )
+                    print(f"Getting {level}s for {retry_message}...")
                 inventory = client.get_stations(
                     network=network,
                     station=station,
                     level=level,
                     starttime=t1,
                 )
+
                 inv.extend(inventory)
                 break
             except exceptions_to_catch as e:
                 if retry_count == max_retries - 1:
-                    print(f"Max retry count reached for {network}. Skipping.")
-                    print(f"Failed getting {level} for {station}")
+                    print(f"Max retry count reached for {retry_message}. Skipping.")
+                    print(f"Failed getting {level} for {retry_message}")
                     print(f"Error: {e.__class__.__name__}")
                 else:
                     print(
-                        f"Error occurred in get_station for network {network} at station {station}: {e.__class__.__name__}"
+                        f"Error occurred in get_station for {retry_message}: {e.__class__.__name__}"
                     )
                 continue
-
-    return inv
-
-
-def get_level_network_wise(client, network, stations, level, t1):
-    max_retries = 5
-    inv = Inventory()
-    exceptions_to_catch = (
-        FDSNException,
-        FDSNNoDataException,
-        XMLSyntaxError,
-        gzip.BadGzipFile,
-        ConnectionError,
-    )
-    for retry_count in range(max_retries):
-        try:
-            if retry_count == 0:
-                print(f"Getting {level}s for network {network}...")
-            inv = client.get_stations(
-                network=network,
-                station=",".join(stations),
-                level=level,
-                starttime=t1,
-            )
-            break
-        except exceptions_to_catch as e:
-            if retry_count == max_retries - 1:
-                print(f"Max retry count reached for {network}. Skipping.")
-                print(f"Error: {e.__class__.__name__}")
-            else:
-                print(
-                    f"Error occurred in get_station for network {network}: {e.__class__.__name__}"
-                )
-            continue
-
     return inv
 
 
@@ -112,7 +80,6 @@ def get_waveforms(
                 endtime=t2,
                 **kwargs,
             )
-            st_obs0.merge()
             if not st_obs0:
                 print(f"Got empty stream for {network} {station.code}")
             break
@@ -179,9 +146,13 @@ def retrieve_waveforms(
             continue
 
         if "level" == "channel":
-            inventory = get_level_network_wise(client, network, stations, level, t1)
+            inventory = get_station_data(
+                client, network, stations, level, t1, network_wise=True
+            )
         else:
-            inventory = get_level_station_wise(client, network, stations, level, t1)
+            inventory = get_station_data(
+                client, network, stations, level, t1, network_wise=False
+            )
 
         if len(inventory) == 0:
             print(f"could not get {level} for {network}")
@@ -233,6 +204,7 @@ def retrieve_waveforms(
                     taper_fraction=0.05,
                     inventory=inventory,
                 )
+                st_obs0.merge()
             except ValueError:
                 # In theory this should not happen, but it does...
                 # ValueError: No response information found. Use `inventory` parameter to specify an inventory with response information.
