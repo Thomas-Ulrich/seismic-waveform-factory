@@ -4,12 +4,41 @@ from obspy.clients.fdsn.header import FDSNNoDataException, FDSNException
 from obspy.clients.fdsn import Client, RoutingClient
 from requests.exceptions import ConnectionError
 from obspy.core.inventory import Inventory
+from obspy.core.util.obspy_types import ObsPyException
+from obspy import read_inventory
 import gzip
 import os
 
 
-def get_station_data(client, network, stations, level, t1, network_wise=True):
+def load_cached_station_data(network, stations, level, cache_dir):
     inv = Inventory()
+    stations_not_cached = []
+    for station in stations:
+        cache_file = os.path.join(cache_dir, f"{network}_{station}_{level}.xml")
+        if os.path.exists(cache_file):
+            print(f"Loading cached data for {network}.{station}")
+            station_inv = read_inventory(cache_file)
+            inv.extend(station_inv)
+        else:
+            print(f"No cached data found for {network}.{station}")
+            stations_not_cached.append(station)
+    return inv, stations_not_cached
+
+
+def save_station_data(inventory, level, cache_dir):
+    # Save inventory station-wise regardless of retrieval method
+    for net in inventory:
+        for sta in net:
+            station_inv = Inventory(networks=[net.copy()])
+            station_inv[0].stations = [sta]
+            station_cache_file = os.path.join(
+                cache_dir, f"{net.code}_{sta.code}_{level}.xml"
+            )
+            station_inv.write(station_cache_file, format="STATIONXML")
+            print(f"Saved data for station {net.code}.{sta.code}")
+
+
+def get_station_data(client, network, stations, level, t1, network_wise=True):
     exceptions_to_catch = (
         FDSNException,
         FDSNNoDataException,
@@ -17,11 +46,17 @@ def get_station_data(client, network, stations, level, t1, network_wise=True):
         gzip.BadGzipFile,
         ConnectionError,
     )
+    cache_dir = "observations"
+    os.makedirs(cache_dir, exist_ok=True)
+    inv, stations_not_cached = load_cached_station_data(
+        network, stations, level, cache_dir
+    )
 
     if network_wise:
-        station_param = [",".join(stations)]
+        station_param = [",".join(stations_not_cached)]
     else:
-        station_param = stations
+        station_param = stations_not_cached
+
     for station in station_param:
         retry_message = f"network {network} at station(s) {station}"
         max_retries = 5
@@ -37,6 +72,7 @@ def get_station_data(client, network, stations, level, t1, network_wise=True):
                 )
 
                 inv.extend(inventory)
+                save_station_data(inventory, level, cache_dir)
                 break
             except exceptions_to_catch as e:
                 if retry_count == max_retries - 1:
@@ -145,7 +181,7 @@ def retrieve_waveforms(
         if not stations:
             continue
 
-        if "level" == "channel":
+        if level == "channel":
             inventory = get_station_data(
                 client, network, stations, level, t1, network_wise=True
             )
@@ -191,7 +227,7 @@ def retrieve_waveforms(
             }
 
             pre_filt = get_pre_filt(selected_band)
-
+            exceptions_to_catch = (ValueError, ObsPyException)
             try:
                 st_obs0.remove_response(
                     output=output_dic[kind_vd],
@@ -204,11 +240,14 @@ def retrieve_waveforms(
                     taper_fraction=0.05,
                     inventory=inventory,
                 )
-                st_obs0.merge()
-            except ValueError:
+            except exceptions_to_catch as e:
                 # In theory this should not happen, but it does...
                 # ValueError: No response information found. Use `inventory` parameter to specify an inventory with response information.
-                print("ValueError: when removing_response at station {code}")
+                # or
+                # obspy.core.util.obspy_types.ObsPyException: Can not use evalresp on response with no response stages.
+                print(
+                    f"Error in st_obs0.remove_response  at station {code}: {e.__class__.__name__}"
+                )
                 continue
             st_obs0.write(fullfname, format="MSEED")
             retrieved_waveforms[code] = st_obs0

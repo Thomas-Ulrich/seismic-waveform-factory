@@ -330,6 +330,7 @@ for ins, station_code in enumerate(station_coords):
             network_station, client_name, kind_vd, path_observations, starttime, endtime
         )
         st_obs0 = retrieved_waveforms[f"{network}.{station}"]
+        st_obs0.merge()
     network = st_obs0[0].stats.network
 
     lst = []

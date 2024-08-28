@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.offsetbox import AnchoredText
-from retrieve_waveforms import retrieve_waveforms
 from obspy.signal.tf_misfit import pg, eg
 import os
 
