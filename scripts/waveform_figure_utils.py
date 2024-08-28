@@ -8,6 +8,7 @@ from lxml.etree import XMLSyntaxError
 import gzip
 import pickle
 import os
+from retrieve_waveforms import get_station_data
 
 
 def get_station_name_from_mseed(file_path):
@@ -99,64 +100,45 @@ def compile_station_coords_main(station_codes, station_file, client_name, t1):
     return station_coords
 
 
-def compile_list_inventories(client_name, station_codes, t1):
+def initialize_client(client_name):
+    exceptions_to_catch = (UnicodeDecodeError,)
     max_retries = 5
-    retry_count = 0
-    while retry_count < max_retries:
+
+    for retry_count in range(max_retries):
         try:
             if client_name in ["eida-routing", "iris-federator"]:
-                c = RoutingClient(client_name)
+                return RoutingClient(client_name)
             else:
-                c = Client(client_name)
-            break
-        except UnicodeDecodeError as e:
-            print("excepting UnicodeDecodeError in Client", e)
-            retry_count += 1
-            if retry_count == max_retries:
-                raise UnicodeDecodeError("Max retry count reached")
+                return Client(client_name)
+        except exceptions_to_catch as e:
+            print(f"Error initializing client: {e.__class__.__name__}")
+            if retry_count == max_retries - 1:
+                raise Exception(
+                    f"Max retry count reached while initializing client: {e}"
+                )
+
+
+def parse_network_station(netStaCode):
+    parts = netStaCode.split(".")
+    return ("*", parts[0]) if len(parts) == 1 else (parts[0], parts[1])
+
+
+def compile_list_inventories(client_name, station_codes, t1):
+    # Initialize client
+    client = initialize_client(client_name)
+    # Prepare cache directory
+    cache_dir = "observations"
+    os.makedirs(cache_dir, exist_ok=True)
 
     list_inventory = []
-    for ins, netStaCode in enumerate(station_codes):
-        listNetStaCode = netStaCode.split(".")
-        if len(listNetStaCode) == 1:
-            station = netStaCode
-            network = "*"
-        else:
-            network, station = listNetStaCode
-        max_retries = 5
-        retry_count = 0
-        while retry_count < max_retries:
-            try:
-                if retry_count == 0:
-                    print(f"getting channels for network {network}...")
-                inventory = c.get_stations(
-                    network=network, station=station, level="channel", starttime=t1
-                )
-                break
-            except XMLSyntaxError as e:
-                print(
-                    f"excepting XML Syntax Error in get_stations for network {network}",
-                    e,
-                )
-                retry_count += 1
-                if retry_count == max_retries:
-                    raise XMLSyntaxError("Max retry count reached")
-            except gzip.BadGzipFile as e:
-                print(
-                    f"excepting gzip.BadGzipFile in get_stations for network {network}",
-                    e,
-                )
-                retry_count += 1
-                if retry_count == max_retries:
-                    raise gzip.BadGzipFile("Max retry count reached")
-            except ValueError as e:
-                # ValueError: The current client does not have a station service.
-                print(f"excepting ValueError in get_stations for network {network}", e)
-                retry_count += 1
-                if retry_count == max_retries:
-                    raise ValueError("Max retry count reached")
-        # print(inventory)
-        list_inventory.append(inventory)
+    for netStaCode in station_codes:
+        network, station = parse_network_station(netStaCode)
+        print(network, station)
+        inventory = get_station_data(
+            client, network, [station], "channel", t1, cache_dir
+        )
+        if inventory:
+            list_inventory.append(inventory)
 
     return list_inventory
 
