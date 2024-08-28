@@ -40,6 +40,25 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     return geodesic(coords_1, coords_2).km
 
 
+def remove_synthetics_from_inventory(original_inv):
+    new_inv = Inventory()
+
+    for network in original_inv:
+        # Create a new network
+        new_network = network.copy()
+        new_network.stations = []  # Clear the stations list
+        for station in network:
+            if not station.site.name:
+                new_network.stations.append(station)
+            elif "synthetic" not in station.site.name.lower():
+                new_network.stations.append(station)
+
+        # If the network has any stations left, add it to the new inventory
+        if new_network.stations:
+            new_inv.networks.append(new_network)
+    return new_inv
+
+
 def generate_geopanda_dataframe(inv0, fault_info):
     df = pd.DataFrame(
         columns=["network", "station", "longitude", "latitude", "distance_km"]
@@ -205,7 +224,6 @@ def load_or_create_inventory(
             kargs["latitude"] = event["latitude"]
             kargs["longitude"] = event["longitude"]
         print(kargs)
-
         inventory = client.get_stations(
             starttime=starttime,
             endtime=endtime,
@@ -309,7 +327,7 @@ if __name__ == "__main__":
         t_before,
         t_before,
     )
-
+    inventory = remove_synthetics_from_inventory(inventory)
     available_stations = generate_geopanda_dataframe(inventory, fault_info)
 
     projection = config.get("GENERAL", "projection", fallback="")
@@ -327,7 +345,7 @@ if __name__ == "__main__":
         print(f"done writing {fname}")
 
     available_stations = available_stations[
-        available_stations["distance_km"] >= 30
+        available_stations["distance_km"] >= 0
     ].reset_index(drop=True)
     # + 10 because we expect some station with no data
     if len(available_stations) > (args.number_stations + 10):
