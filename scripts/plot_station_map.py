@@ -10,13 +10,12 @@ import configparser
 from obspy.clients.fdsn import Client, RoutingClient
 import os
 from fault_processing import compute_shapely_polygon
+from retrieve_waveforms import get_station_data
+from waveform_figure_utils import initialize_client
 
 
 def retrieve_coordinates(client_name, event, station_codes):
-    if client_name == "eida-routing":
-        client = RoutingClient(client_name)
-    else:
-        client = Client(client_name)
+    client = initialize_client(client_name)
 
     event_time = UTCDateTime(event["onset"])
 
@@ -30,8 +29,8 @@ def retrieve_coordinates(client_name, event, station_codes):
         else:
             network, station = listNetStaCode
 
-        inventory = client.get_stations(
-            network=network, station=station, level="station", starttime=event_time
+        inventory = get_station_data(
+            client, network, [station], "station", event_time, network_wise=False
         )
         new_row = {
             "network": inventory[0].code,
