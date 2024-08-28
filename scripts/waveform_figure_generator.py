@@ -188,7 +188,7 @@ class WaveformFigureGenerator:
             st_obs.rotate(method="NE->RT")
             for st in lst_copy:
                 st.rotate(method="NE->RT")
-
+        st_obs = st_obs.split()
         for myst in [*lst_copy, st_obs]:
             # myst.detrend("linear")
             myst.taper(max_percentage=0.05, type="hann")
@@ -199,6 +199,7 @@ class WaveformFigureGenerator:
                 corners=4,
                 zerophase=True,
             )
+        st_obs.merge()
         if self.normalize:
             offset = self.relative_offset
         else:
@@ -315,9 +316,11 @@ class WaveformFigureGenerator:
         strace.interpolate(
             sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
         )
+        otrace = otrace.split()
         otrace.interpolate(
             sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
         )
+        otrace = otrace.merge()[0]
 
         def nanrms(x, axis=None):
             return np.sqrt(np.nanmean(x**2, axis=axis))

@@ -51,7 +51,8 @@ def get_station_data(client, network, stations, level, t1, network_wise=True):
     inv, stations_not_cached = load_cached_station_data(
         network, stations, level, cache_dir
     )
-
+    if not stations_not_cached:
+        return inv
     if network_wise:
         station_param = [",".join(stations_not_cached)]
     else:
