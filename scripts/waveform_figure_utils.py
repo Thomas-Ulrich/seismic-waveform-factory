@@ -71,16 +71,7 @@ def compile_missing_stations(station_codes, station_coords_all):
 
 
 def download_station_coords(station_codes, client_name, t1):
-    station_codes_name = "_".join(station_codes)
-    fn_list_inventory = f"observations/{station_codes_name}.pkl"
-    print(f"checking if list_inventory stored in {fn_list_inventory}")
-    if os.path.exists(fn_list_inventory):
-        list_inventory = pickle.load(open(fn_list_inventory, "rb"))
-    else:
-        list_inventory = compile_list_inventories(client_name, station_codes, t1)
-        with open(fn_list_inventory, "wb") as f:
-            pickle.dump(list_inventory, f, pickle.HIGHEST_PROTOCOL)
-
+    list_inventory = compile_list_inventories(client_name, station_codes, t1)
     print([f"{inv[0][0].code}" for inv in list_inventory])
     return compile_station_coords(list_inventory)
 
