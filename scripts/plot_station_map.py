@@ -123,6 +123,11 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="generate teleseismic station map")
     parser.add_argument("config_file", help="config file describing event and stations")
+    parser.add_argument(
+        "--plot_all_station_file",
+        action="store_true",
+    )
+
     args = parser.parse_args()
 
     config = configparser.ConfigParser()
@@ -139,8 +144,13 @@ if __name__ == "__main__":
     station_codes = config.get("GENERAL", "stations").split(",")
     software = config.get("GENERAL", "software").split(",")
     set_global = "axitra" not in software
+    station_file = config.get("GENERAL", "station_file", fallback=None)
 
-    df = retrieve_coordinates(client_name, event, station_codes)
+    if args.plot_all_station_file:
+        df = pd.read_csv(station_file)
+        df.rename(columns={"lon": "longitude", "lat": "latitude"}, inplace=True)
+    else:
+        df = retrieve_coordinates(client_name, event, station_codes)
     print(df)
 
     faultfname = config.get("GENERAL", "fault_filename", fallback=None)
