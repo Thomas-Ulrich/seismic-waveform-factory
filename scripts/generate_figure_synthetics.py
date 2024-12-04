@@ -72,6 +72,9 @@ t1 = UTCDateTime(onset)
 kind_vd = config.get("GENERAL", "kind")
 
 software = config.get("GENERAL", "software").split(",")
+# prevent result ['']
+software = [item.strip() for item in software if item.strip()]
+
 n_software = len(software)
 prefix = f"plots/{setup_name}_{kind_vd}"
 if "instaseis" in software:

@@ -32,7 +32,7 @@ def get_station_files_dict(directory):
             if station_name:
                 station_files[station_name] = file_path
     nfiles = len(station_files)
-    print(f"found {nfiles} waveforms in {directory}")
+    print(f"found {nfiles} waveform files in {directory}")
     return station_files
 
 
