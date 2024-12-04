@@ -15,12 +15,27 @@ from geopy.distance import geodesic
 from shapely.geometry import Point
 from shapely.ops import nearest_points
 from pyproj import Transformer
-from retrieve_waveforms import retrieve_waveforms
+from retrieve_waveforms import retrieve_waveforms_including_preprocessed
 from plot_station_map import generate_station_map
 from fault_processing import compute_shapely_polygon, get_fault_slip_coords
 from scipy import spatial
+from waveform_figure_utils import get_station_files_dict
 
 np.random.seed(42)
+
+
+def generate_station_df(inv0):
+    df = pd.DataFrame(columns=["network", "station", "longitude", "latitude"])
+    for i, net in enumerate(inv0):
+        for j, sta in enumerate(net):
+            new_row = {
+                "network": net.code,
+                "station": sta.code,
+                "longitude": sta.lon,
+                "latitude": sta.lat,
+            }
+            df.loc[len(df)] = new_row
+    return df
 
 
 def compute_dict_network_station(df):
@@ -59,7 +74,7 @@ def remove_synthetics_from_inventory(original_inv):
     return new_inv
 
 
-def generate_geopanda_dataframe(inv0, fault_info):
+def generate_geopanda_dataframe(df_stations, fault_info):
     df = pd.DataFrame(
         columns=["network", "station", "longitude", "latitude", "distance_km"]
     )
@@ -69,22 +84,20 @@ def generate_geopanda_dataframe(inv0, fault_info):
         coords = fault_info["fault_slip_coords"] / 1e3
         tree = spatial.KDTree(coords)
 
-    for i, net in enumerate(inv0):
-        for j, sta in enumerate(net):
-            if fault_info:
-                x1, y1 = transformer.transform(sta.longitude, sta.latitude)
-                min_distance, _ = tree.query([x1 / 1e3, y1 / 1e3, 0])
-            else:
-                min_distance = -1.0
-
-            new_row = {
-                "network": net.code,
-                "station": sta.code,
-                "longitude": sta.longitude,
-                "latitude": sta.latitude,
-                "distance_km": min_distance,
-            }
-            df.loc[len(df)] = new_row
+    for _, row in df_stations.iterrows():
+        if fault_info:
+            x1, y1 = transformer.transform(row.longitude, row.latitude)
+            min_distance, _ = tree.query([x1 / 1e3, y1 / 1e3, 0])
+        else:
+            min_distance = -1.0
+        new_row = {
+            "network": row.network,
+            "station": row.station,
+            "longitude": row.longitude,
+            "latitude": row.latitude,
+            "distance_km": min_distance,
+        }
+        df.loc[len(df)] = new_row
     df["code"] = df["network"] + "." + df["station"]
     df.sort_values(by="distance_km", inplace=True)
     df = df.reset_index(drop=True)
@@ -274,6 +287,21 @@ if __name__ == "__main__":
     is_teleseismic = "axitra" not in software
 
     faultfname = config.get("GENERAL", "fault_filename", fallback=None)
+    station_file = config.get("GENERAL", "station_file", fallback=None)
+
+    processed_data = {}
+    processed_data["directory"] = config.get(
+        "GENERAL", "processed_waveforms", fallback=None
+    )
+
+    if processed_data["directory"]:
+        processed_data["wf_kind"] = config.get("GENERAL", "processed_waveforms_kind")
+        processed_data["wf_factor"] = config.getfloat(
+            "GENERAL", "processed_waveforms_factor", fallback=1.0
+        )
+        processed_data["station_files"] = get_station_files_dict(
+            processed_data["directory"]
+        )
 
     spatial_range = {}
 
@@ -318,17 +346,25 @@ if __name__ == "__main__":
     endtime = event["onset"] + t_after
 
     os.makedirs(path_observations, exist_ok=True)
-    inventory = load_or_create_inventory(
-        client,
-        client_name,
-        event,
-        path_observations,
-        spatial_range,
-        t_before,
-        t_before,
-    )
-    inventory = remove_synthetics_from_inventory(inventory)
-    available_stations = generate_geopanda_dataframe(inventory, fault_info)
+
+    if station_file:
+        station_df = pd.read_csv(station_file)
+        station_df.rename(columns={"lon": "longitude", "lat": "latitude"}, inplace=True)
+        print(station_df)
+    else:
+        inventory = load_or_create_inventory(
+            client,
+            client_name,
+            event,
+            path_observations,
+            spatial_range,
+            t_before,
+            t_before,
+        )
+        inventory = remove_synthetics_from_inventory(inventory)
+        station_df = generate_station_df(inv0)
+
+    available_stations = generate_geopanda_dataframe(station_df, fault_info)
 
     projection = config.get("GENERAL", "projection", fallback="")
     if projection:
@@ -386,9 +422,17 @@ if __name__ == "__main__":
         print("available:", available_stations)
 
         network_station = compute_dict_network_station(added_rows)
-        retrieved_waveforms = retrieve_waveforms(
-            network_station, client_name, kind_vd, path_observations, starttime, endtime
+
+        retrieved_waveforms = retrieve_waveforms_including_preprocessed(
+            network_station,
+            client_name,
+            kind_vd,
+            path_observations,
+            starttime,
+            endtime,
+            processed_data,
         )
+
         retrieved_stations = list(retrieved_waveforms.keys())
         print("retrieved_stations", retrieved_stations)
         added_rows = selected_stations[

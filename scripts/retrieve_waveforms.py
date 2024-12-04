@@ -254,3 +254,51 @@ def retrieve_waveforms(
             retrieved_waveforms[code] = st_obs0
             print(f"done writing {fullfname}")
     return retrieved_waveforms
+
+
+def retrieve_waveforms_including_preprocessed(
+    network_station,
+    client_name,
+    kind_vd,
+    path_observations,
+    starttime,
+    endtime,
+    processed_data,
+):
+
+    pr_wf_kind = processed_data["wf_kind"]
+    pr_wf_factor = processed_data["wf_factor"]
+    processed_station_files = processed_data["station_files"]
+    processed_waveforms = processed_data["directory"]
+
+    retrieved_waveforms = {}
+    for network, stations in network_station.items():
+        for station in stations:
+            network_station_tmp = {network: [station]}
+            code = f"{network}.{station}"
+            st_obs0 = None
+            if processed_waveforms:
+                if code in processed_station_files:
+                    st_obs0 = read(processed_station_files[code])
+                    dict_kind = {"acceleration": 0, "velocity": 1, "displacement": 2}
+                    number_diff = dict_kind[kind_vd] - dict_kind[pr_wf_kind]
+                    operation = (
+                        st_obs0.integrate if number_diff > 0 else st_obs0.differentiate
+                    )
+                    for _ in range(abs(number_diff)):
+                        operation()
+                    for tr in st_obs0:
+                        tr.data *= pr_wf_factor
+                    retrieved_waveforms[code] = st_obs0
+                    continue
+            if not st_obs0:
+                retrieved_waveforms_tmp = retrieve_waveforms(
+                    network_station_tmp,
+                    client_name,
+                    kind_vd,
+                    path_observations,
+                    starttime,
+                    endtime,
+                )
+                retrieved_waveforms[code] = retrieved_waveforms_tmp[code]
+    return retrieved_waveforms

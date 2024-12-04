@@ -6,7 +6,7 @@ import argparse
 import configparser
 import matplotlib.pyplot as plt
 import os
-from retrieve_waveforms import retrieve_waveforms
+from retrieve_waveforms import retrieve_waveforms_including_preprocessed
 from waveform_figure_generator import WaveformFigureGenerator
 import sys
 from waveform_figure_utils import (
@@ -152,15 +152,20 @@ surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
 surface_waves_ncol_per_component = config.getint("SURFACE_WAVES", "ncol_per_component")
 surface_waves_components = config.get("SURFACE_WAVES", "components").split(",")
 
+processed_data = {}
+processed_data["directory"] = config.get(
+    "GENERAL", "processed_waveforms", fallback=None
+)
 
-processed_waveforms = config.get("GENERAL", "processed_waveforms", fallback=None)
-
-if processed_waveforms:
-    pr_wf_kind = config.get("GENERAL", "processed_waveforms_kind")
-    pr_wf_factor = config.getfloat(
+if processed_data["directory"]:
+    processed_data["wf_kind"] = config.get("GENERAL", "processed_waveforms_kind")
+    processed_data["wf_factor"] = config.getfloat(
         "GENERAL", "processed_waveforms_factor", fallback=1.0
     )
-    processed_station_files = get_station_files_dict(processed_waveforms)
+    processed_data["station_files"] = get_station_files_dict(
+        processed_data["directory"]
+    )
+
 
 station_file = config.get("GENERAL", "station_file", fallback=None)
 station_coords = compile_station_coords_main(
@@ -315,25 +320,20 @@ for ins, station_code in enumerate(station_coords):
     network, station = station_code.split(".")
     starttime = t1 - t_obs_before
     endtime = t1 + t_obs_after
+
     network_station = {network: [station]}
-    code = f"{network}.{station}"
-    st_obs0 = None
-    if processed_waveforms:
-        if code in processed_station_files:
-            st_obs0 = read(processed_station_files[code])
-            dict_kind = {"acceleration": 0, "velocity": 1, "displacement": 2}
-            number_diff = dict_kind[kind_vd] - dict_kind[pr_wf_kind]
-            operation = st_obs0.integrate if number_diff > 0 else st_obs0.differentiate
-            for _ in range(abs(number_diff)):
-                operation()
-            for tr in st_obs0:
-                tr.data *= pr_wf_factor
-    if not st_obs0:
-        retrieved_waveforms = retrieve_waveforms(
-            network_station, client_name, kind_vd, path_observations, starttime, endtime
-        )
-        st_obs0 = retrieved_waveforms[f"{network}.{station}"]
-        st_obs0.merge()
+    retrieved_waveforms = retrieve_waveforms_including_preprocessed(
+        network_station,
+        client_name,
+        kind_vd,
+        path_observations,
+        starttime,
+        endtime,
+        processed_data,
+    )
+    st_obs0 = retrieved_waveforms[f"{network}.{station}"]
+    st_obs0.merge()
+
     network = st_obs0[0].stats.network
 
     lst = []
