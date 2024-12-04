@@ -31,8 +31,8 @@ def generate_station_df(inv0):
             new_row = {
                 "network": net.code,
                 "station": sta.code,
-                "longitude": sta.lon,
-                "latitude": sta.lat,
+                "longitude": sta.longitude,
+                "latitude": sta.latitude,
             }
             df.loc[len(df)] = new_row
     return df
@@ -362,7 +362,7 @@ if __name__ == "__main__":
             t_before,
         )
         inventory = remove_synthetics_from_inventory(inventory)
-        station_df = generate_station_df(inv0)
+        station_df = generate_station_df(inventory)
 
     available_stations = generate_geopanda_dataframe(station_df, fault_info)
 

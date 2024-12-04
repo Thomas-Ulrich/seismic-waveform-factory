@@ -265,11 +265,11 @@ def retrieve_waveforms_including_preprocessed(
     endtime,
     processed_data,
 ):
-
-    pr_wf_kind = processed_data["wf_kind"]
-    pr_wf_factor = processed_data["wf_factor"]
-    processed_station_files = processed_data["station_files"]
     processed_waveforms = processed_data["directory"]
+    if processed_waveforms:
+        pr_wf_kind = processed_data["wf_kind"]
+        pr_wf_factor = processed_data["wf_factor"]
+        processed_station_files = processed_data["station_files"]
 
     retrieved_waveforms = {}
     for network, stations in network_station.items():
@@ -300,5 +300,6 @@ def retrieve_waveforms_including_preprocessed(
                     starttime,
                     endtime,
                 )
-                retrieved_waveforms[code] = retrieved_waveforms_tmp[code]
+                if code in retrieved_waveforms_tmp:
+                    retrieved_waveforms[code] = retrieved_waveforms_tmp[code]
     return retrieved_waveforms
