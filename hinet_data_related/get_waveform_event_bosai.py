@@ -45,7 +45,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 sorigin_time = args.origin_time_utc[0]
-processed_date = sorigin_time.replace(" ", "_")
+processed_date = sorigin_time.replace(" ", "_").replace(":","_")
 outdir =  f"BOSAI_{processed_date}"
 
 origin_time = UTCDateTime(sorigin_time).datetime
