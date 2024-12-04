@@ -95,8 +95,8 @@ def generate_synthetics_from_axitra_green_functions(
                 synth[k * nstation + ista] += fftconvolve(
                     gf[ista, :], resampled_stf, "full"
                 )[0:ndt_axitra]
-    # 0.01 : cm2m 0.5*dt_axitra: normalization of the Dirac?
-    return dt_axitra, synth * dt_axitra * 0.5 * 0.01
+    # dt_axitra: normalization of the Dirac?
+    return dt_axitra, synth * dt_axitra
 
 
 def create_synthetic_stream(starttime, dt, station_coords, synth):
