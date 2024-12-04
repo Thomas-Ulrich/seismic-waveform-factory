@@ -107,6 +107,18 @@ def generate_geopanda_dataframe(df_stations, fault_info):
     return gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
 
 
+def select_closest_stations(available_stations, selected_stations, nstations):
+    if len(selected_stations) == 0:
+        print("selected_stations is empty, selcting the n closest nstation")
+        selected_stations = available_stations.head(nstations)
+        available_stations = available_stations.drop(selected_stations.index)
+
+    nselected = len(selected_stations)
+    remaining_stations = nstations - nselected
+
+    return selected_stations.sort_index(), available_stations.sort_index()
+
+
 def select_stations_most_distant(available_stations, selected_stations, nstations):
     if len(selected_stations) == 0:
         print("selected_stations is empty, selecting randomly from available_stations")
@@ -198,8 +210,12 @@ def parse_arguments():
     )
     parser.add_argument("config_file", help="Config file describing the event.")
     parser.add_argument(
-        "number_stations", type=int, help="Number of stations to select."
+        "number_stations", type=int, help="Number of stations to select (in total)"
     )
+    parser.add_argument(
+        "closest_stations", type=int, help="Number of the closest station to select."
+    )
+
     parser.add_argument(
         "--azimuthal",
         action="store_true",
@@ -275,7 +291,7 @@ def compute_min_max_coords(fault_info):
 if __name__ == "__main__":
     args = parse_arguments()
     config = read_config(args.config_file)
-
+    setup_name = config.get("GENERAL", "setup_name")
     client_name = config.get("GENERAL", "client")
     onset = config.get("GENERAL", "onset")
     hypo_lon = config.getfloat("GENERAL", "hypo_lon")
@@ -368,6 +384,7 @@ if __name__ == "__main__":
 
     projection = config.get("GENERAL", "projection", fallback="")
     if projection:
+        # 60 closest stations are written for seissol output
         closest_stations = available_stations.head(60)
         transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
         x1, y1 = transformer.transform(
@@ -399,6 +416,12 @@ if __name__ == "__main__":
     args.number_stations = min(args.number_stations, len(available_stations))
     # initialize empty df
     selected_stations = pd.DataFrame(columns=available_stations.columns)
+
+    if args.closest_stations:
+        assert args.closest_stations <= args.number_stations
+        selected_stations, available_stations = select_closest_stations(
+            available_stations, selected_stations, args.closest_stations
+        )
 
     while True:
         if args.azimuthal:
@@ -453,8 +476,9 @@ if __name__ == "__main__":
             print("done selecting stations")
             print(selected_stations)
             break
-
-    generate_station_map(selected_stations, event, fault_info=fault_info)
+    generate_station_map(
+        selected_stations, event, setup_name=setup_name, fault_info=fault_info
+    )
     if "{{ stations }}" in config_stations:
         templateLoader = jinja2.FileSystemLoader(searchpath=os.getcwd())
         templateEnv = jinja2.Environment(loader=templateLoader)
