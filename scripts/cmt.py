@@ -2,6 +2,7 @@ import numpy as np
 from netCDF4 import Dataset
 from scipy.interpolate import RegularGridInterpolator
 import h5py
+import sys
 
 
 def compute_rigidity(muDescription, muValue, coords):
@@ -37,6 +38,9 @@ def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):
     # Useful if large portion of the fault not ruptured
     if np.amax(fault_slip) / slip_threshold < 20:
         print("Warning, slip_threshold is a significant portion of the maximum slip")
+    if np.amax(fault_slip) == 0.0:
+        print("fault slip is zero, exiting...")
+        sys.exit(0)
     x1_slip = x1[fault_slip > slip_threshold]
     x1min = np.amin(x1_slip)
     x1max = np.amax(x1_slip)
