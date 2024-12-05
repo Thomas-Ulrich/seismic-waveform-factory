@@ -390,12 +390,14 @@ if __name__ == "__main__":
         x1, y1 = transformer.transform(
             closest_stations["longitude"], closest_stations["latitude"]
         )
-        fname = "tmp/seissol_station.txt"
-        os.makedirs("tmp", exist_ok=True)
-        with open(fname, "w") as fid:
-            for i in range(x1.shape[0]):
-                fid.write(f"{x1[i]} {y1[i]} 0\n")
-        print(f"done writing {fname}")
+        n_seissol_station = len(closest_stations)
+        for k in [n_seissol_station, 5]:
+            fname = f"tmp/seissol_station_{k}.txt"
+            os.makedirs("tmp", exist_ok=True)
+            with open(fname, "w") as fid:
+                for i in range(k):
+                    fid.write(f"{x1[i]} {y1[i]} 0\n")
+            print(f"done writing {fname}")
 
     available_stations = available_stations[
         available_stations["distance_km"] >= 0
