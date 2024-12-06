@@ -216,8 +216,17 @@ def retrieve_waveforms(
 
             if not st_obs0:
                 continue
-
-            st_obs0.rotate(method="->ZNE", inventory=inventory)
+            try:
+                st_obs0.rotate(method="->ZNE", inventory=inventory)
+            except ValueError as e:
+                # get rid of this rare error:
+                # raise ValueError("The given directions are not linearly independent, "
+                # ValueError: The given directions are not linearly independent,
+                # at least within numerical precision. Determinant of the base change matrix: 0
+                print(
+                    f"Error in st_obs0.rotate  at station {code}: {e.__class__.__name__}"
+                )
+                continue
 
             # define a filter band to prevent amplifying noise during the deconvolution
             # pre_filt = [0.00033, 0.001, 1.0, 3.0]
