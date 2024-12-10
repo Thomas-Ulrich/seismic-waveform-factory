@@ -378,10 +378,12 @@ if __name__ == "__main__":
             t_before,
         )
         inventory = remove_synthetics_from_inventory(inventory)
+        print("remove AM network")
+        filtered_networks = [net for net in inventory.networks if net.code != "AM"]
+        inventory = Inventory(networks=filtered_networks, source=inventory.source)
         station_df = generate_station_df(inventory)
 
     available_stations = generate_geopanda_dataframe(station_df, fault_info)
-
     projection = config.get("GENERAL", "projection", fallback="")
     if projection:
         # 60 closest stations are written for seissol output
@@ -419,25 +421,27 @@ if __name__ == "__main__":
     # initialize empty df
     selected_stations = pd.DataFrame(columns=available_stations.columns)
 
-    if args.closest_stations:
-        assert args.closest_stations <= args.number_stations
-        selected_stations, available_stations = select_closest_stations(
-            available_stations, selected_stations, args.closest_stations
-        )
 
     while True:
-        if args.azimuthal:
-            (
-                selected_stations,
-                available_stations,
-            ) = select_telseismic_stations_aiming_for_azimuthal_coverage(
-                inventory, event, args.number_stations
+        if args.closest_stations and selected_stations.empty:
+            assert args.closest_stations <= args.number_stations
+            previous_selected_stations = selected_stations.copy()
+            selected_stations, available_stations = select_closest_stations(
+                available_stations, selected_stations, args.closest_stations
             )
         else:
-            previous_selected_stations = selected_stations.copy()
-            selected_stations, available_stations = select_stations_most_distant(
-                available_stations, selected_stations, args.number_stations
-            )
+            if args.azimuthal:
+                (
+                    selected_stations,
+                    available_stations,
+                ) = select_telseismic_stations_aiming_for_azimuthal_coverage(
+                    inventory, event, args.number_stations
+                )
+            else:
+                previous_selected_stations = selected_stations.copy()
+                selected_stations, available_stations = select_stations_most_distant(
+                    available_stations, selected_stations, args.number_stations
+                )
 
         added_rows = selected_stations[
             ~selected_stations["code"].isin(previous_selected_stations["code"])
