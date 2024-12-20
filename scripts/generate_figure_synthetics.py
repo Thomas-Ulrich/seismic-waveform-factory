@@ -329,6 +329,7 @@ retrieved_waveforms = retrieve_waveforms_including_preprocessed(
 
 for ins, station_code in enumerate(station_coords):
     lon, lat = station_coords[station_code]
+    network, station = station_code.split(".")
     st_obs0 = retrieved_waveforms[f"{network}.{station}"]
     st_obs0.merge()
 
