@@ -9,6 +9,7 @@ import gzip
 import pickle
 import os
 from retrieve_waveforms import get_station_data
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def get_station_name_from_mseed(file_path):
@@ -121,15 +122,27 @@ def compile_list_inventories(client_name, station_codes, t1):
     cache_dir = "observations"
     os.makedirs(cache_dir, exist_ok=True)
 
-    list_inventory = []
-    for netStaCode in station_codes:
+    def fetch_inventory(netStaCode):
         network, station = parse_network_station(netStaCode)
-        print(network, station)
-        inventory = get_station_data(
-            client, network, [station], "channel", t1, cache_dir
-        )
-        if inventory:
-            list_inventory.append(inventory)
+        return get_station_data(client, network, [station], "channel", t1, cache_dir)
+
+    # Use ThreadPoolExecutor to process station codes in parallel
+    list_inventory = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit tasks to the executor
+        futures = {
+            executor.submit(fetch_inventory, code): code for code in station_codes
+        }
+
+        # Collect results as they complete
+        for future in as_completed(futures):
+            netStaCode = futures[future]
+            try:
+                inventory = future.result()
+                if inventory:
+                    list_inventory.append(inventory)
+            except Exception as e:
+                print(f"Error processing {netStaCode}: {e}")
 
     return list_inventory
 

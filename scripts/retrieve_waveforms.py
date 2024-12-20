@@ -8,6 +8,7 @@ from obspy.core.util.obspy_types import ObsPyException
 from obspy import read_inventory
 import gzip
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def load_cached_station_data(network, stations, level, cache_dir):
@@ -166,7 +167,7 @@ def retrieve_waveforms(
     else:
         client = Client(client_name)
         is_routing_client = False
-        level = "channel"
+        level = "response"
 
     os.makedirs(path_observations, exist_ok=True)
     retrieved_waveforms = {}
@@ -239,6 +240,7 @@ def retrieve_waveforms(
             pre_filt = get_pre_filt(selected_band)
             exceptions_to_catch = (ValueError, ObsPyException)
             try:
+
                 st_obs0.remove_response(
                     output=output_dic[kind_vd],
                     pre_filt=pre_filt,
@@ -266,7 +268,7 @@ def retrieve_waveforms(
 
 
 def retrieve_waveforms_including_preprocessed(
-    network_station,
+    station_codes,
     client_name,
     kind_vd,
     path_observations,
@@ -281,34 +283,58 @@ def retrieve_waveforms_including_preprocessed(
         processed_station_files = processed_data["station_files"]
 
     retrieved_waveforms = {}
-    for network, stations in network_station.items():
-        for station in stations:
-            network_station_tmp = {network: [station]}
-            code = f"{network}.{station}"
-            st_obs0 = None
-            if processed_waveforms:
-                if code in processed_station_files:
-                    st_obs0 = read(processed_station_files[code])
-                    dict_kind = {"acceleration": 0, "velocity": 1, "displacement": 2}
-                    number_diff = dict_kind[kind_vd] - dict_kind[pr_wf_kind]
-                    operation = (
-                        st_obs0.integrate if number_diff > 0 else st_obs0.differentiate
-                    )
-                    for _ in range(abs(number_diff)):
-                        operation()
-                    for tr in st_obs0:
-                        tr.data *= pr_wf_factor
-                    retrieved_waveforms[code] = st_obs0
-                    continue
-            if not st_obs0:
-                retrieved_waveforms_tmp = retrieve_waveforms(
-                    network_station_tmp,
-                    client_name,
-                    kind_vd,
-                    path_observations,
-                    starttime,
-                    endtime,
-                )
-                if code in retrieved_waveforms_tmp:
-                    retrieved_waveforms[code] = retrieved_waveforms_tmp[code]
+
+    def handle_station(code):
+        """Handle a single station: read preprocessed or retrieve raw waveforms."""
+        network, station = code.split(".")
+
+        # Check for preprocessed waveforms
+        if processed_waveforms and code in processed_station_files:
+            st_obs = read(processed_station_files[code])  # Read preprocessed waveform
+            # Convert between waveform kinds if needed
+            kind_mapping = {"acceleration": 0, "velocity": 1, "displacement": 2}
+            kind_difference = kind_mapping[kind_vd] - kind_mapping[pr_wf_kind]
+            operation = (
+                st_obs.integrate if kind_difference > 0 else st_obs.differentiate
+            )
+            for _ in range(abs(kind_difference)):
+                operation()
+            for tr in st_obs:
+                tr.data *= pr_wf_factor  # Apply scaling factor
+            return code, st_obs
+
+        # Retrieve raw waveforms if no preprocessed data is available
+        network_station_tmp = {network: [station]}
+        retrieved_waveforms_tmp = retrieve_waveforms(
+            network_station_tmp,
+            client_name,
+            kind_vd,
+            path_observations,
+            starttime,
+            endtime,
+        )
+        if code in retrieved_waveforms_tmp:
+            return code, retrieved_waveforms_tmp[code]
+
+        # If nothing is retrieved, return None
+        return code, None
+
+    # Use ThreadPoolExecutor for parallel processing
+    with ThreadPoolExecutor(max_workers=10) as executor:  # Adjust max_workers as needed
+        # Submit tasks for all stations
+        futures = {
+            executor.submit(handle_station, code): code for code in station_codes
+        }
+
+        # Collect results as tasks complete
+        for future in as_completed(futures):
+            code = futures[future]
+            try:
+                station_code, waveform = future.result()
+                if waveform:
+                    retrieved_waveforms[station_code] = waveform
+            except Exception as e:
+                print(f"Error handling {code}: {e}")
+
     return retrieved_waveforms
+

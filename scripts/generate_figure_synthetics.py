@@ -314,23 +314,21 @@ if "instaseis" in software:
     if not surface_waves_tmax:
         surface_waves.tmax = duration_synthetics
 
+starttime = t1 - t_obs_before
+endtime = t1 + t_obs_after
+retrieved_waveforms = retrieve_waveforms_including_preprocessed(
+    station_codes,
+    client_name,
+    kind_vd,
+    path_observations,
+    starttime,
+    endtime,
+    processed_data,
+)
+
 
 for ins, station_code in enumerate(station_coords):
     lon, lat = station_coords[station_code]
-    network, station = station_code.split(".")
-    starttime = t1 - t_obs_before
-    endtime = t1 + t_obs_after
-
-    network_station = {network: [station]}
-    retrieved_waveforms = retrieve_waveforms_including_preprocessed(
-        network_station,
-        client_name,
-        kind_vd,
-        path_observations,
-        starttime,
-        endtime,
-        processed_data,
-    )
     st_obs0 = retrieved_waveforms[f"{network}.{station}"]
     st_obs0.merge()
 
