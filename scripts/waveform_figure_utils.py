@@ -124,7 +124,8 @@ def compile_list_inventories(client_name, station_codes, t1):
 
     def fetch_inventory(netStaCode):
         network, station = parse_network_station(netStaCode)
-        return get_station_data(client, network, [station], "channel", t1, cache_dir)
+        # response because we will need it anyway at some point
+        return get_station_data(client, network, [station], "response", t1, cache_dir)
 
     # Use ThreadPoolExecutor to process station codes in parallel
     list_inventory = []
