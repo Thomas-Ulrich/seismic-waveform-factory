@@ -9,6 +9,7 @@ from obspy import read_inventory
 import gzip
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import glob
 
 
 def load_cached_station_data(network, stations, level, cache_dir):
@@ -144,16 +145,22 @@ def get_pre_filt(selected_band):
         return [0.001, 0.005, 45, 50]
 
 
-def select_band(channels):
+def select_band_with_data(stream, channels):
+    """
+    Select a band based on priority, considering only channels with actual data.
+
+    :param stream: ObsPy Stream object containing retrieved waveform data.
+    :param channels: List of channel codes from the inventory.
+    :return: The selected band, or None if no suitable band has data.
+    """
     priorities = ["H", "B", "E", "M", "L"]
     for band in priorities:
-        if any(channel.startswith(band) for channel in channels):
-            if any(channel.startswith(band + "H") for channel in channels):
-                return band + "H"
-            elif any(channel.startswith(band + "N") for channel in channels):
-                return band + "N"
-            else:
-                return band
+        for sub_band in ["N", "H"]:
+            full_band = band + sub_band
+            if any(channel.startswith(full_band) for channel in channels):
+                # Check if the stream contains data for this band
+                if stream.select(channel=f"{full_band}*"):
+                    return full_band
     return None
 
 
@@ -173,9 +180,11 @@ def retrieve_waveforms(
     retrieved_waveforms = {}
     for network, stations in network_station.items():
         for station in stations.copy():
-            fname = f"{network}.{station}_{kind_vd}_{t1.date}.mseed"
-            fullfname = os.path.join(path_observations, fname)
-            if os.path.exists(fullfname):
+            pattern = f"{network}.{station}_*_{kind_vd}_{t1.date}.mseed"
+            search_path = os.path.join(path_observations, pattern)
+            matching_files = glob.glob(search_path)
+            if matching_files:
+                fullfname = matching_files[0]
                 print(f"reading the data from {fullfname}")
                 code = f"{network}.{station}"
                 retrieved_waveforms[code] = read(fullfname)
@@ -191,32 +200,32 @@ def retrieve_waveforms(
             inventory = get_station_data(
                 client, network, stations, level, t1, network_wise=False
             )
-
+        print(inventory)
         if len(inventory) == 0:
             print(f"could not get {level} for {network}")
             continue
 
         for station in [sta for net in inventory for sta in net]:
-            code = f"{network}.{station.code}"
-            fname = f"{code}_{kind_vd}_{t1.date}.mseed"
-            fullfname = os.path.join(path_observations, fname)
-
             print(f"requesting data for {network}.{station.code}")
             channels = [channel.code for channel in station]
 
-            def has_band(x):
-                return any(channel.startswith(x) for channel in channels)
-
-            selected_band = select_band(channels)
-            if not selected_band:
-                print(f"{station.code} does not have the expected channels: {channels}")
-                continue
+            # Get waveforms for all channels
             st_obs0 = get_waveforms(
-                client, network, station, selected_band, t1, t2, is_routing_client
+                client, network, station, "*", t1, t2, is_routing_client
             )
-
             if not st_obs0:
+                print(f"No data retrieved for station {network}.{station.code}")
                 continue
+
+            # Dynamically select a band with actual data
+            selected_band = select_band_with_data(st_obs0, channels)
+            if not selected_band:
+                print(f"No valid data at station {station.code}")
+                continue
+
+            # Filter the stream for the selected band
+            st_obs0 = st_obs0.select(channel=f"{selected_band}*")
+
             try:
                 st_obs0.rotate(method="->ZNE", inventory=inventory)
             except ValueError as e:
@@ -261,6 +270,9 @@ def retrieve_waveforms(
                     f"Error in st_obs0.remove_response  at station {code}: {e.__class__.__name__}"
                 )
                 continue
+            code = f"{network}.{station.code}"
+            fname = f"{code}_{selected_band}_{kind_vd}_{t1.date}.mseed"
+            fullfname = os.path.join(path_observations, fname)
             st_obs0.write(fullfname, format="MSEED")
             retrieved_waveforms[code] = st_obs0
             print(f"done writing {fullfname}")
@@ -337,4 +349,3 @@ def retrieve_waveforms_including_preprocessed(
                 print(f"Error handling {code}: {e}")
 
     return retrieved_waveforms
-
