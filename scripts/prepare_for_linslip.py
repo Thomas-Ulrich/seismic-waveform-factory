@@ -88,7 +88,7 @@ retrieved_waveforms = retrieve_waveforms_including_preprocessed(
 )
 print(retrieved_waveforms)
 
-formatted_time = t1.strftime("%Y %m %d  %H %M %S")
+formatted_time = starttime.strftime("%Y %m %d  %H %M %S")
 nstation = len(retrieved_waveforms)
 
 out_param = f"""#COMMON ORIGIN (DATE, TIME)
@@ -106,9 +106,7 @@ LAT       LONG        DATE_BEGIN  TIME_BEGIN    DT     DIVIDE  DETREND FILTER  I
 --------------------------------------------------------------------------------------------------
 """
 
-if not os.path.exists("data_ascii_linslip"):
-    os.makedirs("data_ascii_linslip")
-
+station_info = ""
 for code in retrieved_waveforms:
     s_obs = retrieved_waveforms[code]
     trace = s_obs[0]
@@ -118,13 +116,22 @@ for code in retrieved_waveforms:
         trace = s_obs.select(component=comp)[0]
         data_to_write += [trace.data]
     data_to_write = np.array(data_to_write).T
-    fname = f"data_ascii_linslip/{code}.txt"
+    fname = f"{code}.txt"
     np.savetxt(fname, data_to_write)
     lon, lat = station_coords[code]
-    out_param += f"{lon}\t{lat} \t{formatted_time}\t{dt}\t1\t1\t0\t1\t0\t{fname}\n"
+    out_param += f"{lat}\t{lon} \t{formatted_time}\t{dt}\t1.\t1\t1\t1\t{fname}\n"
+    station_info += f"1 1 1 1. 1. 1. 1 {code}"
 
+print("#" * 20)
 print(out_param)
 fname = "processseis.in"
 with open(fname, "w") as fout:
     fout.write(out_param)
+print(f"done writing {fname}")
+
+print("#" * 20)
+print(station_info)
+fname = "stainfo.dat"
+with open(fname, "w") as fout:
+    fout.write(station_info)
 print(f"done writing {fname}")
