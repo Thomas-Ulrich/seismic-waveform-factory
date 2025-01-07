@@ -421,7 +421,6 @@ if __name__ == "__main__":
     # initialize empty df
     selected_stations = pd.DataFrame(columns=available_stations.columns)
 
-
     while True:
         if args.closest_stations and selected_stations.empty:
             assert args.closest_stations <= args.number_stations
@@ -451,6 +450,12 @@ if __name__ == "__main__":
         print("available:", available_stations)
 
         network_station = compute_dict_network_station(added_rows)
+        # transform the dictionnary in a list of strings "network.station"
+        network_station = [
+            f"{key}.{value}"
+            for key, values in network_station.items()
+            for value in values
+        ]
 
         retrieved_waveforms = retrieve_waveforms_including_preprocessed(
             network_station,
