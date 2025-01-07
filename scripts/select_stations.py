@@ -407,14 +407,19 @@ if __name__ == "__main__":
     # + 10 because we expect some station with no data
     if len(available_stations) > (args.number_stations + 10):
         dmax = available_stations.iloc[args.number_stations + 10]["distance_km"]
-        print(dmax)
         # Create a boolean mask and filter by distance
         mask = (available_stations["distance_km"] >= 0) & (
             available_stations["distance_km"] <= dmax
         )
+        other_available_stations = available_stations[~mask]
         available_stations = available_stations[mask]
+        print(
+            f"available ({args.number_stations + 10} closest, that is up to {dmax} km):"
+        )
+    else:
+        other_available_stations = gpd.GeoDataFrame()
+        print("available (no restrictions):")
 
-    print("available")
     print(available_stations)
     # required if not enough stations in the inventory
     args.number_stations = min(args.number_stations, len(available_stations))
@@ -479,6 +484,20 @@ if __name__ == "__main__":
         print("new selected_stations", selected_stations)
 
         # required if not enough stations in the inventory
+        if not other_available_stations.empty and len(
+            available_stations
+        ) < args.number_stations - len(selected_stations):
+            available_stations = gpd.GeoDataFrame(
+                pd.concat(
+                    [available_stations, other_available_stations], ignore_index=True
+                )
+            )
+            print("print adding first discarded other available stations")
+            print(other_available_stations)
+            print("available_stations is now:")
+            print(available_stations)
+            other_available_stations = gpd.GeoDataFrame()
+
         args.number_stations = min(
             args.number_stations, len(selected_stations) + len(available_stations)
         )
