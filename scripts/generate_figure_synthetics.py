@@ -257,7 +257,7 @@ if seissol_outputs:
     list_synthetics_all += list_synthetics
 
 
-if "axitra" in software:
+if "axitra" in software and source_files:
     sys.path.append(path2axitra)
     from axitra_routines import generate_synthetics_axitra
 
@@ -276,7 +276,7 @@ if "axitra" in software:
     if not surface_waves_tmax:
         surface_waves.tmax = duration
 
-if "pyprop8" in software:
+if "pyprop8" in software and source_files:
     from pyprop8_routines import generate_synthetics_pyprop8
 
     list_synthetics = generate_synthetics_pyprop8(
@@ -293,7 +293,7 @@ if "pyprop8" in software:
     if not surface_waves_tmax:
         surface_waves.tmax = duration
 
-if "instaseis" in software:
+if "instaseis" in software and source_files:
     list_synthetics = generate_synthetics_instaseis(
         db_name,
         source_files,
