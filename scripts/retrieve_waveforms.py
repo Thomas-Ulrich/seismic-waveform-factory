@@ -112,7 +112,7 @@ def get_waveforms(
         try:
             st_obs0 = client.get_waveforms(
                 network=network,
-                station=station.code,
+                station=station,
                 location="*",
                 channel=f"{selected_band}*",
                 starttime=t1,
@@ -120,20 +120,20 @@ def get_waveforms(
                 **kwargs,
             )
             if not st_obs0:
-                print(f"Got empty stream for {network} {station.code}")
+                print(f"Got empty stream for {network} {station}")
             break
         except exceptions_to_catch as e:
             if retry_count == max_retries - 1:
-                print(f"Max retry count reached for {station.code}. Skipping.")
+                print(f"Max retry count reached for {station}. Skipping.")
                 print(f"Error: {e.__class__.__name__}")
             else:
                 print(
-                    f"Error occurred in get_waveforms for {station.code}: {e.__class__.__name__}"
+                    f"Error occurred in get_waveforms for {station}: {e.__class__.__name__}"
                 )
             continue
 
     if not st_obs0:
-        print(f"No waveform available for {station.code}")
+        print(f"No waveform available for {station}")
 
     return st_obs0
 
@@ -206,12 +206,13 @@ def retrieve_waveforms(
             continue
 
         for station in [sta for net in inventory for sta in net]:
+            code = f"{network}.{station.code}"
             print(f"requesting data for {network}.{station.code}")
             channels = [channel.code for channel in station]
 
             # Get waveforms for all channels
             st_obs0 = get_waveforms(
-                client, network, station, "*", t1, t2, is_routing_client
+                client, network, station.code, "*", t1, t2, is_routing_client
             )
             if not st_obs0:
                 print(f"No data retrieved for station {network}.{station.code}")
@@ -270,7 +271,6 @@ def retrieve_waveforms(
                     f"Error in st_obs0.remove_response  at station {code}: {e.__class__.__name__}"
                 )
                 continue
-            code = f"{network}.{station.code}"
             fname = f"{code}_{selected_band}_{kind_vd}_{t1.date}.mseed"
             fullfname = os.path.join(path_observations, fname)
             st_obs0.write(fullfname, format="MSEED")
