@@ -154,7 +154,10 @@ class WaveformFigureGenerator:
         max_abs_value = float("-inf")
         for stream in streams:
             for comp in self.components:
-                trace = stream.select(component=comp)[0]
+                traces = stream.select(component=comp)
+                if not traces:
+                    continue
+                trace = traces[0]
                 max_trace = self.compute_max_abs_value_trace(trace, reftime)
                 max_abs_value = max(max_abs_value, max_trace)
         if max_abs_value == float("-inf"):
@@ -237,7 +240,12 @@ class WaveformFigureGenerator:
                     self.colors[ist],
                     linewidth=self.line_widths[ist],
                 )
-            otrace = st_obs.select(component=comp)[0]
+            otraces = st_obs.select(component=comp)
+            if not otraces:
+                otrace = st_obs[0].copy()
+                otrace.data *= np.nan
+            else:
+                otrace = otraces[0]
             scaling, annot = self.compute_scaling(otrace, reftime)
             vmax_annot.append(annot)
             self.axarr[ins, j0].plot(
@@ -304,7 +312,15 @@ class WaveformFigureGenerator:
 
     def compute_misfit(self, st, st_obs, comp, reftime):
         strace = st.select(component=comp)[0].copy()
-        otrace = st_obs.select(component=comp)[0].copy()
+
+        otraces = st_obs.select(component=comp)
+        if not otraces:
+            otrace = st_obs[0].copy()
+            otrace.data *= 0
+            return 0, otrace.data[0] * self.scaling
+        else:
+            otrace = otraces[0].copy()
+
         start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
         end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
         start_time_interp = max(reftime + self.t_before, start_osTrace)
