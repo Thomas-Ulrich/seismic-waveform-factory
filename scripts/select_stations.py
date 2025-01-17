@@ -74,20 +74,29 @@ def remove_synthetics_from_inventory(original_inv):
     return new_inv
 
 
-def generate_geopanda_dataframe(df_stations, fault_info):
+def generate_geopanda_dataframe(df_stations, fault_info, projection):
     df = pd.DataFrame(
         columns=["network", "station", "longitude", "latitude", "distance_km"]
     )
-    if fault_info:
-        projection = fault_info["projection"]
+    if projection:
         transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
-        coords = fault_info["fault_slip_coords"] / 1e3
-        tree = spatial.KDTree(coords)
+        if fault_info:
+            coords = fault_info["fault_slip_coords"] / 1e3
+            tree = spatial.KDTree(coords)
+        else:
+            print("using hypocenter to compute distance in km")
+            x1, y1 = transformer.transform(hypo_lon, hypo_lat)
+            hypo_coords = np.array([x1 / 1e3, y1 / 1e3, -hypo_depth_in_km])
 
     for _, row in df_stations.iterrows():
-        if fault_info:
+        if projection:
             x1, y1 = transformer.transform(row.longitude, row.latitude)
-            min_distance, _ = tree.query([x1 / 1e3, y1 / 1e3, 0])
+            if fault_info:
+                min_distance, _ = tree.query([x1 / 1e3, y1 / 1e3, 0])
+            else:
+                min_distance = np.linalg.norm(
+                    np.array([x1 / 1e3, y1 / 1e3, 0]) - hypo_coords
+                )
         else:
             min_distance = -1.0
         new_row = {
@@ -296,6 +305,7 @@ if __name__ == "__main__":
     onset = config.get("GENERAL", "onset")
     hypo_lon = config.getfloat("GENERAL", "hypo_lon")
     hypo_lat = config.getfloat("GENERAL", "hypo_lat")
+    hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
     config_stations = config.get("GENERAL", "stations", fallback="")
     path_observations = config.get("GENERAL", "path_observations")
     kind_vd = config.get("GENERAL", "kind")
@@ -380,8 +390,10 @@ if __name__ == "__main__":
         station_df = generate_station_df(inventory)
     print(station_df)
 
-    available_stations = generate_geopanda_dataframe(station_df, fault_info)
     projection = config.get("GENERAL", "projection", fallback="")
+    available_stations = generate_geopanda_dataframe(station_df, fault_info, projection)
+    print(available_stations)
+
     if projection:
         # 60 closest stations are written for seissol output
         closest_stations = available_stations.head(60)
@@ -401,7 +413,7 @@ if __name__ == "__main__":
         available_stations = available_stations[
             available_stations["distance_km"] >= 0
         ].reset_index(drop=True)
-    
+
     # + 10 because we expect some station with no data
     if len(available_stations) > (args.number_stations + 10):
         dmax = available_stations.iloc[args.number_stations + 10]["distance_km"]
