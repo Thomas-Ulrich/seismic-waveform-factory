@@ -15,7 +15,7 @@ from geopy.distance import geodesic
 from shapely.geometry import Point
 from shapely.ops import nearest_points
 from pyproj import Transformer
-from retrieve_waveforms import retrieve_waveforms_including_preprocessed
+from retrieve_waveforms import retrieve_waveforms
 from plot_station_map import generate_station_map
 from fault_processing import compute_shapely_polygon, get_fault_slip_coords
 from scipy import spatial
@@ -306,14 +306,11 @@ if __name__ == "__main__":
     station_file = config.get("GENERAL", "station_file", fallback=None)
 
     processed_data = {}
-    processed_data["directory"] = config.get(
-        "GENERAL", "processed_waveforms", fallback=None
-    )
-
-    if processed_data["directory"]:
-        processed_data["wf_kind"] = config.get("GENERAL", "processed_waveforms_kind")
+    if config.has_section("PROCESSED_WAVEFORMS"):
+        processed_data["directory"] = config.get("PROCESSED_WAVEFORMS", "directory")
+        processed_data["wf_kind"] = config.get("PROCESSED_WAVEFORMS", "wf_kind")
         processed_data["wf_factor"] = config.getfloat(
-            "GENERAL", "processed_waveforms_factor", fallback=1.0
+            "PROCESSED_WAVEFORMS", "wf_factor", fallback=1.0
         )
         processed_data["station_files"] = get_station_files_dict(
             processed_data["directory"]
@@ -366,7 +363,6 @@ if __name__ == "__main__":
     if station_file:
         station_df = pd.read_csv(station_file)
         station_df.rename(columns={"lon": "longitude", "lat": "latitude"}, inplace=True)
-        print(station_df)
     else:
         inventory = load_or_create_inventory(
             client,
@@ -382,6 +378,7 @@ if __name__ == "__main__":
         filtered_networks = [net for net in inventory.networks if net.code != "AM"]
         inventory = Inventory(networks=filtered_networks, source=inventory.source)
         station_df = generate_station_df(inventory)
+    print(station_df)
 
     available_stations = generate_geopanda_dataframe(station_df, fault_info)
     projection = config.get("GENERAL", "projection", fallback="")
@@ -401,9 +398,10 @@ if __name__ == "__main__":
                     fid.write(f"{x1[i]} {y1[i]} 0\n")
             print(f"done writing {fname}")
 
-    available_stations = available_stations[
-        available_stations["distance_km"] >= 0
-    ].reset_index(drop=True)
+        available_stations = available_stations[
+            available_stations["distance_km"] >= 0
+        ].reset_index(drop=True)
+    
     # + 10 because we expect some station with no data
     if len(available_stations) > (args.number_stations + 10):
         dmax = available_stations.iloc[args.number_stations + 10]["distance_km"]
@@ -462,7 +460,7 @@ if __name__ == "__main__":
             for value in values
         ]
 
-        retrieved_waveforms = retrieve_waveforms_including_preprocessed(
+        retrieved_waveforms = retrieve_waveforms(
             network_station,
             client_name,
             kind_vd,

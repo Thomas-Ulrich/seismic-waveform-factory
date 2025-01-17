@@ -9,6 +9,7 @@ from obspy import read_inventory
 import gzip
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 import glob
 
 
@@ -145,7 +146,7 @@ def get_pre_filt(selected_band):
         return [0.001, 0.005, 45, 50]
 
 
-def select_band_with_data(stream, channels):
+def select_band_with_data(stream, channels, priorities=["H", "B", "E", "M", "L"]):
     """
     Select a band based on priority, considering only channels with actual data.
 
@@ -153,7 +154,6 @@ def select_band_with_data(stream, channels):
     :param channels: List of channel codes from the inventory.
     :return: The selected band, or None if no suitable band has data.
     """
-    priorities = ["H", "B", "E", "M", "L"]
     for band in priorities:
         for sub_band in ["N", "H"]:
             full_band = band + sub_band
@@ -164,8 +164,14 @@ def select_band_with_data(stream, channels):
     return None
 
 
-def retrieve_waveforms(
-    network_station, client_name, kind_vd, path_observations, t1, t2
+def _retrieve_waveforms(
+    network_station,
+    client_name,
+    kind_vd,
+    path_observations,
+    t1,
+    t2,
+    output_format="mseed",
 ):
     if client_name in ["eida-routing", "iris-federator"]:
         client = RoutingClient(client_name)
@@ -239,48 +245,129 @@ def retrieve_waveforms(
                 )
                 continue
 
-            # define a filter band to prevent amplifying noise during the deconvolution
-            # pre_filt = [0.00033, 0.001, 1.0, 3.0]
-            output_dic = {
-                "acceleration": "ACC",
-                "velocity": "VEL",
-                "displacement": "DISP",
-            }
+            if output_format == "mseed":
+                # define a filter band to prevent amplifying noise during the deconvolution
+                # pre_filt = [0.00033, 0.001, 1.0, 3.0]
+                # Process and save as MSEED with response removal
+                output_dic = {
+                    "acceleration": "ACC",
+                    "velocity": "VEL",
+                    "displacement": "DISP",
+                }
+                pre_filt = get_pre_filt(selected_band)
 
-            pre_filt = get_pre_filt(selected_band)
-            exceptions_to_catch = (ValueError, ObsPyException)
-            try:
+                try:
+                    st_obs0.remove_response(
+                        output=output_dic[kind_vd],
+                        pre_filt=pre_filt,
+                        # todo: use water_level if kind_vd == instrument measured quantity (see warning in)
+                        # https://docs.obspy.org/master/packages/autogen/obspy.core.trace.Trace.remove_response.html
+                        water_level=None,
+                        zero_mean=True,
+                        taper=True,
+                        taper_fraction=0.05,
+                        inventory=inventory,
+                    )
+                except (ValueError, ObsPyException) as e:
+                    # In theory this should not happen, but it does...
+                    # ValueError: No response information found. Use `inventory` parameter to specify an inventory with response information.
+                    # or
+                    # obspy.core.util.obspy_types.ObsPyException: Can not use evalresp on response with no response stages.
+                    print(
+                        f"Error in st_obs0.remove_response at station {code}: {e.__class__.__name__}"
+                    )
+                    continue
 
-                st_obs0.remove_response(
-                    output=output_dic[kind_vd],
-                    pre_filt=pre_filt,
-                    # todo: use water_level if kind_vd == instrument measured quantity (see warning in)
-                    # https://docs.obspy.org/master/packages/autogen/obspy.core.trace.Trace.remove_response.html
-                    water_level=None,
-                    zero_mean=True,
-                    taper=True,
-                    taper_fraction=0.05,
-                    inventory=inventory,
+                write_mseed_files(
+                    st_obs0, code, selected_band, kind_vd, t1, path_observations
                 )
-            except exceptions_to_catch as e:
-                # In theory this should not happen, but it does...
-                # ValueError: No response information found. Use `inventory` parameter to specify an inventory with response information.
-                # or
-                # obspy.core.util.obspy_types.ObsPyException: Can not use evalresp on response with no response stages.
-                print(
-                    f"Error in st_obs0.remove_response  at station {code}: {e.__class__.__name__}"
-                )
-                continue
-            fname = f"{code}_{selected_band}_{kind_vd}_{t1.date}.mseed"
-            fullfname = os.path.join(path_observations, fname)
-            st_obs0.write(fullfname, format="MSEED")
+
+            elif output_format == "sac":
+                # Save as SAC without response removal
+                write_sac_files(st_obs0, inventory, path_observations)
+
             retrieved_waveforms[code] = st_obs0
-            print(f"done writing {fullfname}")
     return retrieved_waveforms
 
 
-def retrieve_waveforms_including_preprocessed(
-    station_codes,
+def write_mseed_files(st_obs0, code, selected_band, kind_vd, t1, path_observations):
+    """
+    Write seismic data in MSEED format.
+
+    Parameters:
+    -----------
+    st_obs0 : obspy.Stream
+        Stream object containing the seismic data
+    code : str
+        Station code
+    selected_band : str
+        Selected frequency band
+    kind_vd : str
+        Kind of data (velocity, displacement, etc.)
+    t1 : datetime
+        Start time
+    path_observations : str
+        Path where the MSEED files will be saved
+    """
+    fname = f"{code}_{selected_band}_{kind_vd}_{t1.date}.mseed"
+    fullfname = os.path.join(path_observations, fname)
+    st_obs0.write(fullfname, format="MSEED")
+    print(f"done writing {fullfname}")
+
+
+def write_sac_files(st_obs0, inventory, path_observations):
+    """
+    Write seismic data in SAC format and corresponding SAC pole-zero files.
+
+    Parameters:
+    -----------
+    st_obs0 : obspy.Stream
+        Stream object containing the seismic data
+    inventory : obspy.Inventory
+        Station inventory containing metadata
+    path_observations : str
+        Path where the SAC files will be saved
+    """
+    for tr in st_obs0:
+        # Get station coordinates from inventory
+        inv_channel = inventory.select(
+            network=tr.stats.network,
+            station=tr.stats.station,
+            channel=tr.stats.channel,
+            location=tr.stats.location,
+        )
+
+        # Get coordinates from the first (and usually only) selected station
+        if inv_channel[0].stations:
+            station = inv_channel[0].stations[0]
+
+            # Initialize SAC dictionary if it doesn't exist
+            if not hasattr(tr.stats, "sac"):
+                tr.stats.sac = {}
+
+            # Set station coordinates in SAC header
+            tr.stats.sac.stla = station.latitude
+            tr.stats.sac.stlo = station.longitude
+            tr.stats.sac.stel = station.elevation
+
+        # Write SAC waveform file
+        fname = f"{tr.stats.network}.{tr.stats.station}.{tr.stats.channel}.sac"
+        fullfname = os.path.join(path_observations, fname)
+        tr.write(fullfname, format="SAC")
+
+        # Write SAC pole-zero file
+        pz_fname = (
+            f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_{tr.stats.channel}___"
+        )
+        fullfname_pz = os.path.join(path_observations, pz_fname)
+        from obspy.io.sac.sacpz import _write_sacpz
+
+        _write_sacpz(inv_channel, fullfname_pz)
+        print(f"done writing {fullfname_pz}")
+
+
+def retrieve_waveforms_preprocessed(
+    code,
     client_name,
     kind_vd,
     path_observations,
@@ -288,20 +375,16 @@ def retrieve_waveforms_including_preprocessed(
     endtime,
     processed_data,
 ):
-    processed_waveforms = processed_data["directory"]
-    if processed_waveforms:
+
+    keys_to_check = {"directory", "wf_kind", "wf_factor", "station_files"}
+    if keys_to_check.issubset(processed_data.keys()):
+        processed_waveforms = processed_data["directory"]
         pr_wf_kind = processed_data["wf_kind"]
         pr_wf_factor = processed_data["wf_factor"]
         processed_station_files = processed_data["station_files"]
 
-    retrieved_waveforms = {}
-
-    def handle_station(code):
-        """Handle a single station: read preprocessed or retrieve raw waveforms."""
-        network, station = code.split(".")
-
         # Check for preprocessed waveforms
-        if processed_waveforms and code in processed_station_files:
+        if code in processed_station_files:
             st_obs = read(processed_station_files[code])  # Read preprocessed waveform
             # Convert between waveform kinds if needed
             kind_mapping = {"acceleration": 0, "velocity": 1, "displacement": 2}
@@ -313,29 +396,88 @@ def retrieve_waveforms_including_preprocessed(
                 operation()
             for tr in st_obs:
                 tr.data *= pr_wf_factor  # Apply scaling factor
-            return code, st_obs
-
-        # Retrieve raw waveforms if no preprocessed data is available
-        network_station_tmp = {network: [station]}
-        retrieved_waveforms_tmp = retrieve_waveforms(
-            network_station_tmp,
-            client_name,
-            kind_vd,
-            path_observations,
-            starttime,
-            endtime,
+            return st_obs
+    elif processed_data:
+        raise ValueError(
+            f"{processed_data} is given but does not provides all keys_to_check"
         )
-        if code in retrieved_waveforms_tmp:
-            return code, retrieved_waveforms_tmp[code]
+    else:
+        return None
 
-        # If nothing is retrieved, return None
-        return code, None
+
+def handle_station(
+    code,
+    client_name,
+    kind_vd,
+    path_observations,
+    starttime,
+    endtime,
+    output_format,
+    processed_data,
+):
+    """Handle a single station: read preprocessed or retrieve raw waveforms."""
+    network, station = code.split(".")
+
+    st_obs = retrieve_waveforms_preprocessed(
+        code,
+        client_name,
+        kind_vd,
+        path_observations,
+        starttime,
+        endtime,
+        processed_data,
+    )
+    if st_obs:
+        return code, st_obs
+
+    # Retrieve raw waveforms if no preprocessed data is available
+    network_station_tmp = {network: [station]}
+    retrieved_waveforms_tmp = _retrieve_waveforms(
+        network_station_tmp,
+        client_name,
+        kind_vd,
+        path_observations,
+        starttime,
+        endtime,
+        output_format,
+    )
+    if code in retrieved_waveforms_tmp:
+        return code, retrieved_waveforms_tmp[code]
+
+    # If nothing is retrieved, return None
+    return code, None
+
+
+def retrieve_waveforms(
+    station_codes,
+    client_name,
+    kind_vd,
+    path_observations,
+    starttime,
+    endtime,
+    output_format="mseed",
+    processed_data={},
+):
+    retrieved_waveforms = {}
 
     # Use ThreadPoolExecutor for parallel processing
-    with ThreadPoolExecutor(max_workers=10) as executor:  # Adjust max_workers as needed
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Predefine arguments using partial
+        handle_station_partial = partial(
+            handle_station,
+            client_name=client_name,
+            kind_vd=kind_vd,
+            path_observations=path_observations,
+            starttime=starttime,
+            endtime=endtime,
+            output_format=output_format,
+            processed_data=processed_data,
+        )
+
         # Submit tasks for all stations
         futures = {
-            executor.submit(handle_station, code): code for code in station_codes
+            executor.submit(handle_station_partial, code): code
+            for code in station_codes
         }
 
         # Collect results as tasks complete

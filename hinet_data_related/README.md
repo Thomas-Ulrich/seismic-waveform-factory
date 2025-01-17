@@ -9,7 +9,8 @@ cnt_to_miniseed.py BOSAI_2024-01-01_07_10_09
 ```
 Then add to the ini file:
 ```
-processed_waveforms= path to BOSAI_2024-01-01_07:10:09_miniseed
+[PROCESSED_WAVEFORMS]
+directory= path to BOSAI_2024-01-01_07:10:09_miniseed
 station_file= path to BOSAI_2024-01-01_07:10:09_miniseed/stations.csv
-processed_waveforms_kind = velocity
+wf_kind = velocity
 ```
