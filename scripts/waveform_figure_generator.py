@@ -40,8 +40,8 @@ def autoscale_y(ax, margin=0.1):
             bot = new_bot
         if new_top > top:
             top = new_top
-
-    ax.set_ylim(bot, top)
+    if np.isfinite(bot) and np.isfinite(top):
+        ax.set_ylim(bot, top)
 
 
 class WaveformFigureGenerator:

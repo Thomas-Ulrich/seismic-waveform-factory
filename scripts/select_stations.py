@@ -2,6 +2,7 @@
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client, RoutingClient
 from obspy.geodetics.base import gps2dist_azimuth
+from obspy.geodetics import locations2degrees
 from obspy.core.inventory import Inventory
 from obspy import read_inventory
 import pandas as pd
@@ -166,7 +167,7 @@ def select_stations_most_distant(available_stations, selected_stations, nstation
     return selected_stations.sort_index(), available_stations.sort_index()
 
 
-def select_telseismic_stations_aiming_for_azimuthal_coverage(inv0, event, nstations):
+def select_teleseismic_stations_aiming_for_azimuthal_coverage(inv0, event, nstations):
     df = pd.DataFrame(
         columns=[
             "network",
@@ -185,6 +186,12 @@ def select_telseismic_stations_aiming_for_azimuthal_coverage(inv0, event, nstati
                 lat2=event["latitude"],
                 lon2=event["longitude"],
             )
+            distance = locations2degrees(
+                lat1=sta.latitude,
+                long1=sta.longitude,
+                lat2=event["latitude"],
+                long2=event["longitude"],
+            )
             new_row = {
                 "network": net.code,
                 "station": sta.code,
@@ -194,23 +201,79 @@ def select_telseismic_stations_aiming_for_azimuthal_coverage(inv0, event, nstati
                 "backazimuth": backazimuth,
             }
             df.loc[len(df)] = new_row
-    df.sort_values(by="backazimuth", inplace=True)
-    df["ba_difference"] = df["backazimuth"].diff()
+
     df["code"] = df["network"] + "." + df["station"]
-    df["ba_difference"] = df["ba_difference"].fillna(0)
-    df["cumulative_ba"] = df["ba_difference"].cumsum()
-    df = df.sort_values(by="cumulative_ba")
-    df = df.reset_index(drop=True)
-    # Values to pick
-    target_values = np.linspace(0, 360, nstations + 1)[:-1]
-    print(target_values)
-    # Find te indices of the nearest values
-    nearest_indices = []
-    for val in target_values:
-        nearest_indices.append((df["cumulative_ba"] - val).abs().idxmin())
-    # Slice the DataFrame using the nearest indices
-    df_selected = df.loc[nearest_indices]
-    return df_selected, df
+    # Parameters
+    n = 8  # Number of backazimuth panels (0-360 degrees)
+    p = 4  # Number of distance panels (0-90 degrees)
+
+    # Function to assign backazimuth panel
+    def assign_backazimuth_panel(backazimuth, n):
+        return int(backazimuth // (360 / n))
+
+    # Function to assign distance panel
+    def assign_distance_panel(distance, p):
+        return int((distance - 30) // (60 / p))
+
+    # Assign panels based on backazimuth and distance
+    df["backazimuth_panel"] = df["backazimuth"].apply(assign_backazimuth_panel, n=n)
+    df["distance_panel"] = df["distance"].apply(assign_distance_panel, p=p)
+
+    # Group stations by their backazimuth and distance panels
+    panel_groups = df.groupby(["backazimuth_panel", "distance_panel"])
+
+    # Total number of panels available
+    num_panels = len(panel_groups)
+
+    selected_stations = []
+
+    if num_panels >= nstations:
+        # If there are enough panels, select `n` random panels and sample one station per panel
+        # Convert panel_groups.groups.keys() to a list
+        panel_keys = list(panel_groups.groups.keys())
+
+        # Randomly select panels
+        selected_panels = np.random.choice(
+            len(panel_keys), size=nstations, replace=False
+        )
+
+        # Map the selected indices back to the actual keys
+        selected_panels = [panel_keys[i] for i in selected_panels]
+
+        for panel in selected_panels:
+            group = panel_groups.get_group(panel)
+            selected_station = group.sample(n=1)  # Randomly select one station
+            selected_stations.append(selected_station)
+        selected_stations_df = pd.concat(selected_stations)
+
+    else:
+        # If there are fewer panels than `n`, select all available panels
+        selected_stations = []
+        for (backazimuth_panel, distance_panel), group in panel_groups:
+            # Randomly select one station from each group
+            selected_station = group.sample(n=1)
+            selected_stations.append(selected_station)
+
+        # Combine the selected stations into a DataFrame to track them
+        selected_stations_df = pd.concat(selected_stations)
+        selected_station_ids = selected_stations_df["station"].values.tolist()
+
+        # If there are still remaining stations to reach `nstations`, sample from the remaining stations
+        remaining_stations_needed = nstations - len(selected_stations_df)
+        if remaining_stations_needed > 0:
+            remaining_groups = panel_groups.apply(
+                lambda x: x[~x["station"].isin(selected_station_ids)]
+            )
+            remaining_stations = remaining_groups.sample(
+                n=remaining_stations_needed, replace=False
+            )
+
+            selected_stations_df = pd.concat([selected_stations_df, remaining_stations])
+
+    # Final DataFrame of selected stations
+    df_selected = selected_stations_df
+    df_remaining = df[~df["station"].isin(df_selected["station"])]
+    return df_selected, df_remaining
 
 
 def parse_arguments():
@@ -261,12 +324,16 @@ def load_or_create_inventory(
             kargs["maxradius"] = r1
             kargs["latitude"] = event["latitude"]
             kargs["longitude"] = event["longitude"]
+            if r1 > 30:
+                print("Warning: restricting to networks I* for teleseismic")
+                kargs["network"] = "I*"
         print(kargs)
         inventory = client.get_stations(
             starttime=starttime,
             endtime=endtime,
             level="channel",
             channel="*Z",
+            includerestricted=False,
             **kargs,
         )
         inventory.write(fn_inventory, format="STATIONXML")
@@ -349,12 +416,17 @@ if __name__ == "__main__":
         t_after = duration + 100
         spatial_range["radius"] = [0.0, 2.5]
     else:
-        import instaseis
+        try:
+            import instaseis
 
-        db_name = config.get("GENERAL", "db")
-        db = instaseis.open_db(db_name)
+            signal_length = db.info.length
+            db_name = config.get("GENERAL", "db")
+            db = instaseis.open_db(db_name)
+        except:
+            signal_length = 3600.0
+
         t_before = 1000
-        t_after = db.info.length + 1000
+        t_after = signal_length + 1000
         spatial_range["radius"] = [30, 90]
 
     if client_name in ["eida-routing", "iris-federator"]:
@@ -415,7 +487,7 @@ if __name__ == "__main__":
         ].reset_index(drop=True)
 
     # + 10 because we expect some station with no data
-    if len(available_stations) > (args.number_stations + 10):
+    if len(available_stations) > (args.number_stations + 10) and not is_teleseismic:
         dmax = available_stations.iloc[args.number_stations + 10]["distance_km"]
         # Create a boolean mask and filter by distance
         mask = (available_stations["distance_km"] >= 0) & (
@@ -444,15 +516,15 @@ if __name__ == "__main__":
                 available_stations, selected_stations, args.closest_stations
             )
         else:
+            previous_selected_stations = selected_stations.copy()
             if args.azimuthal:
                 (
                     selected_stations,
                     available_stations,
-                ) = select_telseismic_stations_aiming_for_azimuthal_coverage(
+                ) = select_teleseismic_stations_aiming_for_azimuthal_coverage(
                     inventory, event, args.number_stations
                 )
             else:
-                previous_selected_stations = selected_stations.copy()
                 selected_stations, available_stations = select_stations_most_distant(
                     available_stations, selected_stations, args.number_stations
                 )
@@ -479,7 +551,8 @@ if __name__ == "__main__":
             path_observations,
             starttime,
             endtime,
-            processed_data,
+            processed_data=processed_data,
+            output_format="miniseed",
         )
 
         retrieved_stations = list(retrieved_waveforms.keys())

@@ -320,7 +320,7 @@ retrieved_waveforms = retrieve_waveforms(
     path_observations,
     starttime,
     endtime,
-    processed_data,
+    processed_data=processed_data,
 )
 
 

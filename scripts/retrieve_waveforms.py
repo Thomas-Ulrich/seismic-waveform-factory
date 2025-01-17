@@ -185,16 +185,19 @@ def _retrieve_waveforms(
     os.makedirs(path_observations, exist_ok=True)
     retrieved_waveforms = {}
     for network, stations in network_station.items():
-        for station in stations.copy():
-            pattern = f"{network}.{station}_*_{kind_vd}_{t1.date}.mseed"
-            search_path = os.path.join(path_observations, pattern)
-            matching_files = glob.glob(search_path)
-            if matching_files:
-                fullfname = matching_files[0]
-                print(f"reading the data from {fullfname}")
-                code = f"{network}.{station}"
-                retrieved_waveforms[code] = read(fullfname)
-                stations.remove(station)
+        if output_format != "sac":
+            # if output to sac, we want to redownload the data,
+            # because the data stored as miniseed as instrument corrected
+            for station in stations.copy():
+                pattern = f"{network}.{station}_*_{kind_vd}_{t1.date}.mseed"
+                search_path = os.path.join(path_observations, pattern)
+                matching_files = glob.glob(search_path)
+                if matching_files:
+                    fullfname = matching_files[0]
+                    print(f"reading the data from {fullfname}")
+                    code = f"{network}.{station}"
+                    retrieved_waveforms[code] = read(fullfname)
+                    stations.remove(station)
         if not stations:
             continue
 
@@ -233,18 +236,6 @@ def _retrieve_waveforms(
             # Filter the stream for the selected band
             st_obs0 = st_obs0.select(channel=f"{selected_band}*")
 
-            try:
-                st_obs0.rotate(method="->ZNE", inventory=inventory)
-            except ValueError as e:
-                # get rid of this rare error:
-                # raise ValueError("The given directions are not linearly independent, "
-                # ValueError: The given directions are not linearly independent,
-                # at least within numerical precision. Determinant of the base change matrix: 0
-                print(
-                    f"Error in st_obs0.rotate  at station {code}: {e.__class__.__name__}"
-                )
-                continue
-
             if output_format == "mseed":
                 # define a filter band to prevent amplifying noise during the deconvolution
                 # pre_filt = [0.00033, 0.001, 1.0, 3.0]
@@ -268,13 +259,22 @@ def _retrieve_waveforms(
                         taper_fraction=0.05,
                         inventory=inventory,
                     )
-                except (ValueError, ObsPyException) as e:
-                    # In theory this should not happen, but it does...
-                    # ValueError: No response information found. Use `inventory` parameter to specify an inventory with response information.
-                    # or
+                # except (ValueError, ObsPyException) as e:
+                except ObsPyException as e:
                     # obspy.core.util.obspy_types.ObsPyException: Can not use evalresp on response with no response stages.
                     print(
                         f"Error in st_obs0.remove_response at station {code}: {e.__class__.__name__}"
+                    )
+                    continue
+                try:
+                    st_obs0.rotate(method="->ZNE", inventory=inventory)
+                except ValueError as e:
+                    # get rid of this rare error:
+                    # raise ValueError("The given directions are not linearly independent, "
+                    # ValueError: The given directions are not linearly independent,
+                    # at least within numerical precision. Determinant of the base change matrix: 0
+                    print(
+                        f"Error in st_obs0.rotate  at station {code}: {e.__class__.__name__}"
                     )
                     continue
 
@@ -455,8 +455,8 @@ def retrieve_waveforms(
     path_observations,
     starttime,
     endtime,
-    output_format="mseed",
     processed_data={},
+    output_format="mseed",
 ):
     retrieved_waveforms = {}
 
@@ -470,8 +470,8 @@ def retrieve_waveforms(
             path_observations=path_observations,
             starttime=starttime,
             endtime=endtime,
-            output_format=output_format,
             processed_data=processed_data,
+            output_format=output_format,
         )
 
         # Submit tasks for all stations
