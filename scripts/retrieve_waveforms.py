@@ -41,7 +41,82 @@ def save_station_data(inventory, level, cache_dir):
             print(f"Saved data for station {net.code}.{sta.code}")
 
 
-def get_station_data(client, network, stations, level, t1, network_wise=True):
+def filter_channels_by_availability(inventory, starttime, endtime):
+    """
+    Filter out channels that don't have data availability in the specified time window.
+
+    Parameters:
+    -----------
+    inventory: obspy.core.inventory.Inventory
+        The station inventory to filter
+    starttime: str or UTCDateTime
+        Start time of the period of interest
+    endtime: str or UTCDateTime
+        End time of the period of interest
+
+    Returns:
+    --------
+    obspy.core.inventory.Inventory
+        Filtered inventory with only channels that have data in the specified period
+    """
+    # Convert times to UTCDateTime if they're strings
+    if isinstance(starttime, str):
+        starttime = UTCDateTime(starttime)
+    if isinstance(endtime, str):
+        endtime = UTCDateTime(endtime)
+
+    # Create a new inventory
+    filtered_networks = []
+    code_station_removed = []
+
+    for network in inventory:
+        filtered_stations = []
+
+        for station in network:
+            filtered_channels = []
+
+            for channel in station:
+                # Check if channel has data availability information
+                if channel.data_availability:
+
+                    # Check if the requested time window is included in channel availability
+                    chan_start = channel.data_availability.start
+                    chan_end = channel.data_availability.end
+
+                    if chan_start <= starttime and chan_end >= endtime:
+                        filtered_channels.append(channel)
+                else:
+                    # keep all channel with no data availability information
+                    filtered_channels.append(channel)
+
+            # Only keep station if it has any channels left
+            if filtered_channels:
+                station.channels = filtered_channels
+                filtered_stations.append(station)
+            else:
+                code_station_removed.append(station.code)
+
+        # Only keep network if it has any stations left
+        if filtered_stations:
+            network.stations = filtered_stations
+            filtered_networks.append(network)
+
+    # Create new inventory with filtered networks
+    filtered_inventory = inventory.copy()
+    filtered_inventory.networks = filtered_networks
+
+    if code_station_removed:
+        print(
+            f"removed {len(code_station_removed)} stations based on data availability"
+        )
+        print(code_station_removed)
+    else:
+        print(f"no station removed based on data availability")
+
+    return filtered_inventory
+
+
+def get_station_data(client, network, stations, level, t1, t2, network_wise=True):
     exceptions_to_catch = (
         FDSNException,
         FDSNNoDataException,
@@ -73,6 +148,8 @@ def get_station_data(client, network, stations, level, t1, network_wise=True):
                     station=station,
                     level=level,
                     starttime=t1,
+                    endtime=t2,
+                    includeavailability=True,
                 )
 
                 inv.extend(inventory)
@@ -88,13 +165,14 @@ def get_station_data(client, network, stations, level, t1, network_wise=True):
                         f"Error occurred in get_station for {retry_message}: {e.__class__.__name__}"
                     )
                 continue
+    inv = filter_channels_by_availability(inv, t1, t2)
     return inv
 
 
 def get_waveforms(
     client, network, station, selected_band, t1, t2, is_routing_client=False
 ):
-    max_retries = 5
+    max_retries = 1
     exceptions_to_catch = (
         FDSNException,
         FDSNNoDataException,
@@ -103,7 +181,6 @@ def get_waveforms(
         ConnectionError,
     )
     st_obs0 = False
-
     if is_routing_client:
         kwargs = {}
     else:
@@ -114,7 +191,7 @@ def get_waveforms(
             st_obs0 = client.get_waveforms(
                 network=network,
                 station=station,
-                location="*",
+                location="00",
                 channel=f"{selected_band}*",
                 starttime=t1,
                 endtime=t2,
@@ -171,7 +248,7 @@ def _retrieve_waveforms(
     path_observations,
     t1,
     t2,
-    output_format="mseed",
+    output_format,
 ):
     if client_name in ["eida-routing", "iris-federator"]:
         client = RoutingClient(client_name)
@@ -203,11 +280,11 @@ def _retrieve_waveforms(
 
         if level == "channel":
             inventory = get_station_data(
-                client, network, stations, level, t1, network_wise=True
+                client, network, stations, level, t1, t2, network_wise=True
             )
         else:
             inventory = get_station_data(
-                client, network, stations, level, t1, network_wise=False
+                client, network, stations, level, t1, t2, network_wise=False
             )
         print(inventory)
         if len(inventory) == 0:
@@ -457,37 +534,46 @@ def retrieve_waveforms(
     endtime,
     processed_data={},
     output_format="mseed",
+    parallel=True,
 ):
     retrieved_waveforms = {}
+    assert output_format in ["sac", "mseed"]
+    # Predefine arguments using partial
+    handle_station_partial = partial(
+        handle_station,
+        client_name=client_name,
+        kind_vd=kind_vd,
+        path_observations=path_observations,
+        starttime=starttime,
+        endtime=endtime,
+        processed_data=processed_data,
+        output_format=output_format,
+    )
 
-    # Use ThreadPoolExecutor for parallel processing
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        # Predefine arguments using partial
-        handle_station_partial = partial(
-            handle_station,
-            client_name=client_name,
-            kind_vd=kind_vd,
-            path_observations=path_observations,
-            starttime=starttime,
-            endtime=endtime,
-            processed_data=processed_data,
-            output_format=output_format,
-        )
+    if parallel:
+        # Use ThreadPoolExecutor for parallel processing
+        with ThreadPoolExecutor(max_workers=10) as executor:
 
-        # Submit tasks for all stations
-        futures = {
-            executor.submit(handle_station_partial, code): code
-            for code in station_codes
-        }
+            # Submit tasks for all stations
+            futures = {
+                executor.submit(handle_station_partial, code): code
+                for code in station_codes
+            }
 
-        # Collect results as tasks complete
-        for future in as_completed(futures):
-            code = futures[future]
-            try:
-                station_code, waveform = future.result()
-                if waveform:
-                    retrieved_waveforms[station_code] = waveform
-            except Exception as e:
-                print(f"Error handling {code}: {e}")
+            # Collect results as tasks complete
+            for future in as_completed(futures):
+                code = futures[future]
+                try:
+                    station_code, waveform = future.result()
+                    if waveform:
+                        retrieved_waveforms[station_code] = waveform
+                except Exception as e:
+                    print(f"Error handling {code}: {e}")
+
+    else:
+        for code in station_codes:
+            station_code, waveform = handle_station_partial(code)
+            if waveform:
+                retrieved_waveforms[station_code] = waveform
 
     return retrieved_waveforms

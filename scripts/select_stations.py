@@ -16,7 +16,7 @@ from geopy.distance import geodesic
 from shapely.geometry import Point
 from shapely.ops import nearest_points
 from pyproj import Transformer
-from retrieve_waveforms import retrieve_waveforms
+from retrieve_waveforms import retrieve_waveforms, filter_channels_by_availability
 from plot_station_map import generate_station_map
 from fault_processing import compute_shapely_polygon, get_fault_slip_coords
 from scipy import spatial
@@ -326,16 +326,18 @@ def load_or_create_inventory(
             kargs["longitude"] = event["longitude"]
             if r1 > 30:
                 print("Warning: restricting to networks I* for teleseismic")
-                kargs["network"] = "I*"
+                kargs["network"] = "IU"
         print(kargs)
         inventory = client.get_stations(
             starttime=starttime,
             endtime=endtime,
             level="channel",
-            channel="*Z",
+            channel="*",
             includerestricted=False,
+            includeavailability=True,
             **kargs,
         )
+        inventory = filter_channels_by_availability(inventory, starttime, endtime)
         inventory.write(fn_inventory, format="STATIONXML")
     return inventory
 
@@ -552,7 +554,7 @@ if __name__ == "__main__":
             starttime,
             endtime,
             processed_data=processed_data,
-            output_format="miniseed",
+            output_format="mseed",
         )
 
         retrieved_stations = list(retrieved_waveforms.keys())
