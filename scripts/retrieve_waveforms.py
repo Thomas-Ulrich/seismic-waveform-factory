@@ -223,7 +223,7 @@ def get_pre_filt(selected_band):
         return [0.001, 0.005, 45, 50]
 
 
-def select_band_with_data(stream, channels, priorities=["H", "B", "E", "M", "L"]):
+def select_band_with_data(stream, channels, priorities=["B", "H", "E", "M", "L"]):
     """
     Select a band based on priority, considering only channels with actual data.
 
@@ -262,19 +262,42 @@ def _retrieve_waveforms(
     os.makedirs(path_observations, exist_ok=True)
     retrieved_waveforms = {}
     for network, stations in network_station.items():
-        if output_format != "sac":
-            # if output to sac, we want to redownload the data,
-            # because the data stored as miniseed as instrument corrected
+        sac_file_needed = False
+        if output_format == "sac":
+            sac_file_needed = True
             for station in stations.copy():
-                pattern = f"{network}.{station}_*_{kind_vd}_{t1.date}.mseed"
+                # Get SAC data files
+                pattern = f"{network}.{station}.*.sac"
                 search_path = os.path.join(path_observations, pattern)
                 matching_files = glob.glob(search_path)
-                if matching_files:
-                    fullfname = matching_files[0]
+
+                # Get PZ files
+                pattern = f"SAC_PZs_{network}_{station}_*"
+                search_path = os.path.join(path_observations, pattern)
+                matching_pz_files = glob.glob(search_path)
+
+                if matching_files and matching_pz_files:
+                    sac_file_needed = False
+
+        for station in stations.copy():
+            pattern = f"{network}.{station}_*_{kind_vd}_{t1.date}.mseed"
+            search_path = os.path.join(path_observations, pattern)
+            matching_files = glob.glob(search_path)
+            if matching_files:
+                fullfname = matching_files[0]
+                if not sac_file_needed:
                     print(f"reading the data from {fullfname}")
                     code = f"{network}.{station}"
                     retrieved_waveforms[code] = read(fullfname)
                     stations.remove(station)
+                else:
+                    print(
+                        f"{fullfname} found, but we will redownload the data because the"
+                    )
+                    print(
+                        "sac file is needed (and we need raw data, not instrumented corrected)"
+                    )
+
         if not stations:
             continue
 
@@ -312,56 +335,54 @@ def _retrieve_waveforms(
 
             # Filter the stream for the selected band
             st_obs0 = st_obs0.select(channel=f"{selected_band}*")
-
-            if output_format == "mseed":
-                # define a filter band to prevent amplifying noise during the deconvolution
-                # pre_filt = [0.00033, 0.001, 1.0, 3.0]
-                # Process and save as MSEED with response removal
-                output_dic = {
-                    "acceleration": "ACC",
-                    "velocity": "VEL",
-                    "displacement": "DISP",
-                }
-                pre_filt = get_pre_filt(selected_band)
-
-                try:
-                    st_obs0.remove_response(
-                        output=output_dic[kind_vd],
-                        pre_filt=pre_filt,
-                        # todo: use water_level if kind_vd == instrument measured quantity (see warning in)
-                        # https://docs.obspy.org/master/packages/autogen/obspy.core.trace.Trace.remove_response.html
-                        water_level=None,
-                        zero_mean=True,
-                        taper=True,
-                        taper_fraction=0.05,
-                        inventory=inventory,
-                    )
-                # except (ValueError, ObsPyException) as e:
-                except ObsPyException as e:
-                    # obspy.core.util.obspy_types.ObsPyException: Can not use evalresp on response with no response stages.
-                    print(
-                        f"Error in st_obs0.remove_response at station {code}: {e.__class__.__name__}"
-                    )
-                    continue
-                try:
-                    st_obs0.rotate(method="->ZNE", inventory=inventory)
-                except ValueError as e:
-                    # get rid of this rare error:
-                    # raise ValueError("The given directions are not linearly independent, "
-                    # ValueError: The given directions are not linearly independent,
-                    # at least within numerical precision. Determinant of the base change matrix: 0
-                    print(
-                        f"Error in st_obs0.rotate  at station {code}: {e.__class__.__name__}"
-                    )
-                    continue
-
-                write_mseed_files(
-                    st_obs0, code, selected_band, kind_vd, t1, path_observations
-                )
-
-            elif output_format == "sac":
+            if output_format == "sac":
                 # Save as SAC without response removal
                 write_sac_files(st_obs0, inventory, path_observations)
+
+            # define a filter band to prevent amplifying noise during the deconvolution
+            # pre_filt = [0.00033, 0.001, 1.0, 3.0]
+            # Process and save as MSEED with response removal
+            output_dic = {
+                "acceleration": "ACC",
+                "velocity": "VEL",
+                "displacement": "DISP",
+            }
+            pre_filt = get_pre_filt(selected_band)
+
+            try:
+                st_obs0.remove_response(
+                    output=output_dic[kind_vd],
+                    pre_filt=pre_filt,
+                    # todo: use water_level if kind_vd == instrument measured quantity (see warning in)
+                    # https://docs.obspy.org/master/packages/autogen/obspy.core.trace.Trace.remove_response.html
+                    water_level=None,
+                    zero_mean=True,
+                    taper=True,
+                    taper_fraction=0.05,
+                    inventory=inventory,
+                )
+            # except (ValueError, ObsPyException) as e:
+            except ObsPyException as e:
+                # obspy.core.util.obspy_types.ObsPyException: Can not use evalresp on response with no response stages.
+                print(
+                    f"Error in st_obs0.remove_response at station {code}: {e.__class__.__name__}"
+                )
+                continue
+            try:
+                st_obs0.rotate(method="->ZNE", inventory=inventory)
+            except ValueError as e:
+                # get rid of this rare error:
+                # raise ValueError("The given directions are not linearly independent, "
+                # ValueError: The given directions are not linearly independent,
+                # at least within numerical precision. Determinant of the base change matrix: 0
+                print(
+                    f"Error in st_obs0.rotate  at station {code}: {e.__class__.__name__}"
+                )
+                continue
+
+            write_mseed_files(
+                st_obs0, code, selected_band, kind_vd, t1, path_observations
+            )
 
             retrieved_waveforms[code] = st_obs0
     return retrieved_waveforms
@@ -417,6 +438,7 @@ def write_sac_files(st_obs0, inventory, path_observations):
         # Get coordinates from the first (and usually only) selected station
         if inv_channel[0].stations:
             station = inv_channel[0].stations[0]
+            channel = inv_channel[0][0][0]
 
             # Initialize SAC dictionary if it doesn't exist
             if not hasattr(tr.stats, "sac"):
@@ -427,15 +449,26 @@ def write_sac_files(st_obs0, inventory, path_observations):
             tr.stats.sac.stlo = station.longitude
             tr.stats.sac.stel = station.elevation
 
+            # Set component orientation based on channel code
+            comp = tr.stats.channel[-1].upper()
+            if comp in ["1", "2"]:
+                if hasattr(channel, "azimuth") and hasattr(channel, "dip"):
+                    tr.stats.sac.cmpaz = channel.azimuth  # Azimuth from north (degrees)
+                    tr.stats.sac.cmpinc = (
+                        90 + channel.dip
+                    )  # Convert dip to incidence angle
+                else:
+                    raise ValueError(
+                        f"channel.azimuth abd channel.dip unknown for {tr.id}"
+                    )
+
         # Write SAC waveform file
         fname = f"{tr.stats.network}.{tr.stats.station}.{tr.stats.channel}.sac"
         fullfname = os.path.join(path_observations, fname)
         tr.write(fullfname, format="SAC")
 
         # Write SAC pole-zero file
-        pz_fname = (
-            f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_{tr.stats.channel}___"
-        )
+        pz_fname = f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_{tr.stats.channel}_{tr.stats.location}"
         fullfname_pz = os.path.join(path_observations, pz_fname)
         from obspy.io.sac.sacpz import _write_sacpz
 
