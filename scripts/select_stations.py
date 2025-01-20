@@ -167,42 +167,10 @@ def select_stations_most_distant(available_stations, selected_stations, nstation
     return selected_stations.sort_index(), available_stations.sort_index()
 
 
-def select_teleseismic_stations_aiming_for_azimuthal_coverage(inv0, event, nstations):
-    df = pd.DataFrame(
-        columns=[
-            "network",
-            "station",
-            "longitude",
-            "latitude",
-            "distance",
-            "backazimuth",
-        ]
-    )
-    for i, net in enumerate(inv0):
-        for j, sta in enumerate(net):
-            distance, azimuth, backazimuth = gps2dist_azimuth(
-                lat1=sta.latitude,
-                lon1=sta.longitude,
-                lat2=event["latitude"],
-                lon2=event["longitude"],
-            )
-            distance = locations2degrees(
-                lat1=sta.latitude,
-                long1=sta.longitude,
-                lat2=event["latitude"],
-                long2=event["longitude"],
-            )
-            new_row = {
-                "network": net.code,
-                "station": sta.code,
-                "longitude": sta.longitude,
-                "latitude": sta.latitude,
-                "distance": distance,
-                "backazimuth": backazimuth,
-            }
-            df.loc[len(df)] = new_row
-
-    df["code"] = df["network"] + "." + df["station"]
+def select_teleseismic_stations_aiming_for_azimuthal_coverage(
+    available_stations, selected_stations_at_start, nstations
+):
+    df = available_stations
     # Parameters
     n = 8  # Number of backazimuth panels (0-360 degrees)
     p = 4  # Number of distance panels (0-90 degrees)
@@ -271,7 +239,10 @@ def select_teleseismic_stations_aiming_for_azimuthal_coverage(inv0, event, nstat
             selected_stations_df = pd.concat([selected_stations_df, remaining_stations])
 
     # Final DataFrame of selected stations
-    df_selected = selected_stations_df
+    df_selected = pd.merge(
+        selected_stations_df, selected_stations_at_start, how="outer"
+    )
+
     df_remaining = df[~df["station"].isin(df_selected["station"])]
     return df_selected, df_remaining
 
@@ -325,7 +296,7 @@ def load_or_create_inventory(
             kargs["latitude"] = event["latitude"]
             kargs["longitude"] = event["longitude"]
             if r1 > 30:
-                print("Warning: restricting to networks I* for teleseismic")
+                print("Warning: restricting to networks IU for teleseismic")
                 kargs["network"] = "IU"
         print(kargs)
         inventory = client.get_stations(
@@ -504,6 +475,30 @@ if __name__ == "__main__":
         other_available_stations = gpd.GeoDataFrame()
         print("available (no restrictions):")
 
+    if args.azimuthal:
+        backazimuth_list = []
+        distance_list = []
+        for _, row in available_stations.iterrows():
+            distance, azimuth, backazimuth = gps2dist_azimuth(
+                lat1=row.latitude,
+                lon1=row.longitude,
+                lat2=event["latitude"],
+                lon2=event["longitude"],
+            )
+            distance = locations2degrees(
+                lat1=row.latitude,
+                long1=row.longitude,
+                lat2=event["latitude"],
+                long2=event["longitude"],
+            )
+            # Append results to lists
+            backazimuth_list.append(backazimuth)
+            distance_list.append(distance)
+        # Add the new columns to the DataFrame
+        available_stations["backazimuth"] = backazimuth_list
+        available_stations["distance"] = distance_list
+        available_stations = available_stations.drop(columns=["geometry"])
+
     print(available_stations)
     # required if not enough stations in the inventory
     args.number_stations = min(args.number_stations, len(available_stations))
@@ -524,7 +519,7 @@ if __name__ == "__main__":
                     selected_stations,
                     available_stations,
                 ) = select_teleseismic_stations_aiming_for_azimuthal_coverage(
-                    inventory, event, args.number_stations
+                    available_stations, selected_stations, args.number_stations
                 )
             else:
                 selected_stations, available_stations = select_stations_most_distant(
@@ -554,7 +549,7 @@ if __name__ == "__main__":
             starttime,
             endtime,
             processed_data=processed_data,
-            output_format="mseed",
+            output_format="sac",
         )
 
         retrieved_stations = list(retrieved_waveforms.keys())
