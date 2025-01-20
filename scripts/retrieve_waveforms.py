@@ -282,7 +282,7 @@ def _retrieve_waveforms(
         for station in stations.copy():
             pattern = f"{network}.{station}_*_{kind_vd}_{t1.date}.mseed"
             search_path = os.path.join(path_observations, pattern)
-            matching_files = glob.glob(search_path)
+            matching_files = sorted(glob.glob(search_path))
             if matching_files:
                 fullfname = matching_files[0]
                 if not sac_file_needed:
@@ -470,9 +470,7 @@ def write_sac_files(st_obs0, inventory, path_observations):
         # Write SAC pole-zero file
         pz_fname = f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_{tr.stats.channel}_{tr.stats.location}"
         fullfname_pz = os.path.join(path_observations, pz_fname)
-        from obspy.io.sac.sacpz import _write_sacpz
-
-        _write_sacpz(inv_channel, fullfname_pz)
+        inv_channel.write(fullfname_pz, format="SACPZ")
         print(f"done writing {fullfname_pz}")
 
 
