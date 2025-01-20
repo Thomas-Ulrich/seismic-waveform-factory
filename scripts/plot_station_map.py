@@ -12,33 +12,56 @@ import os
 from fault_processing import compute_shapely_polygon
 from retrieve_waveforms import get_station_data
 from waveform_figure_utils import initialize_client
+from obspy import read_inventory
 
 
 def retrieve_coordinates(client_name, event, station_codes):
-    client = initialize_client(client_name)
-
-    event_time = UTCDateTime(event["onset"])
-
     df = pd.DataFrame(columns=["network", "station", "longitude", "latitude"])
+    fn_inventory = f"{path_observations}/inv_{client_name}.xml"
+    if os.path.exists(fn_inventory):
+        inventory = read_inventory(fn_inventory)
+        for network in inventory:
+            filtered_stations = []
+            for station in network:
+                code = f"{network.code}.{station.code}"
+                if code in station_codes:
+                    new_row = {
+                        "network": network.code,
+                        "station": station.code,
+                        "longitude": station.longitude,
+                        "latitude": station.latitude,
+                    }
+                    df.loc[len(df)] = new_row
 
-    for ins, netStaCode in enumerate(station_codes):
-        listNetStaCode = netStaCode.split(".")
-        if len(listNetStaCode) == 1:
-            station = netStaCode
-            network = "*"
-        else:
-            network, station = listNetStaCode
+    else:
+        client = initialize_client(client_name)
 
-        inventory = get_station_data(
-            client, network, [station], "station", event_time, network_wise=False
-        )
-        new_row = {
-            "network": inventory[0].code,
-            "station": inventory[0][0].code,
-            "longitude": inventory[0][0].longitude,
-            "latitude": inventory[0][0].latitude,
-        }
-        df.loc[len(df)] = new_row
+        event_time = UTCDateTime(event["onset"])
+
+        for ins, netStaCode in enumerate(station_codes):
+            listNetStaCode = netStaCode.split(".")
+            if len(listNetStaCode) == 1:
+                station = netStaCode
+                network = "*"
+            else:
+                network, station = listNetStaCode
+
+            inventory = get_station_data(
+                client,
+                network,
+                [station],
+                "station",
+                event_time,
+                event_time + 100,
+                network_wise=False,
+            )
+            new_row = {
+                "network": inventory[0].code,
+                "station": inventory[0][0].code,
+                "longitude": inventory[0][0].longitude,
+                "latitude": inventory[0][0].latitude,
+            }
+            df.loc[len(df)] = new_row
     return df
 
 
@@ -145,6 +168,7 @@ if __name__ == "__main__":
     software = config.get("GENERAL", "software").split(",")
     set_global = "axitra" not in software
     station_file = config.get("GENERAL", "station_file", fallback=None)
+    path_observations = config.get("GENERAL", "path_observations")
 
     if args.plot_all_station_file:
         df = pd.read_csv(station_file)
