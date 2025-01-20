@@ -26,9 +26,12 @@ def autoscale_y(ax, margin=0.1):
         yd = line.get_ydata()
         lo, hi = ax.get_xlim()
         y_displayed = yd[((xd > lo) & (xd < hi))]
-        h = np.max(y_displayed) - np.min(y_displayed)
-        bot = np.min(y_displayed) - margin * h
-        top = np.max(y_displayed) + margin * h
+        if len(y_displayed) > 0:
+            h = np.max(y_displayed) - np.min(y_displayed)
+            bot = np.min(y_displayed) - margin * h
+            top = np.max(y_displayed) + margin * h
+        else:
+            bot, top = np.inf, -np.inf
         return bot, top
 
     lines = ax.get_lines()
