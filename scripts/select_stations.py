@@ -168,8 +168,9 @@ def select_stations_most_distant(available_stations, selected_stations, nstation
 
 
 def select_teleseismic_stations_aiming_for_azimuthal_coverage(
-    available_stations, selected_stations_at_start, nstations
+    available_stations, selected_stations_at_start, nstations_to_select
 ):
+    nstations = nstations_to_select - len(selected_stations_at_start)
     df = available_stations
     # Parameters
     n = 8  # Number of backazimuth panels (0-360 degrees)
