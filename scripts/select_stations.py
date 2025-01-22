@@ -431,9 +431,15 @@ if __name__ == "__main__":
             t_before,
         )
         inventory = remove_synthetics_from_inventory(inventory)
-        print("remove AM network")
         filtered_networks = [net for net in inventory.networks if net.code != "AM"]
-        inventory = Inventory(networks=filtered_networks, source=inventory.source)
+        new_inventory = Inventory(networks=filtered_networks, source=inventory.source)
+        all_stations = new_inventory.get_contents()['stations']
+        if len(all_stations) > (args.number_stations):
+            print("remove AM network")
+            inventory = new_inventory
+        else:
+            print("did not remove AM network, else too no enough stations remaining")
+
         station_df = generate_station_df(inventory)
     print(station_df)
 
@@ -490,7 +496,9 @@ if __name__ == "__main__":
 
     while True:
         if args.closest_stations and selected_stations.empty:
-            assert args.closest_stations <= args.number_stations
+            if args.closest_stations <= args.number_stations:
+                print("args.closest_stations <= args.number_stations")
+                args.closest_stations = args.number_stations
             previous_selected_stations = selected_stations.copy()
             selected_stations, available_stations = select_closest_stations(
                 available_stations, selected_stations, args.closest_stations
