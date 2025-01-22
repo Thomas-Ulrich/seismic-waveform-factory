@@ -16,6 +16,7 @@ from geopy.distance import geodesic
 from shapely.geometry import Point
 from shapely.ops import nearest_points
 from pyproj import Transformer
+from geodetic_utils import add_distance_backazimuth_to_df
 from retrieve_waveforms import retrieve_waveforms, filter_channels_by_availability
 from plot_station_map import generate_station_map
 from fault_processing import compute_shapely_polygon, get_fault_slip_coords
@@ -477,27 +478,8 @@ if __name__ == "__main__":
         print("available (no restrictions):")
 
     if args.azimuthal:
-        backazimuth_list = []
-        distance_list = []
-        for _, row in available_stations.iterrows():
-            distance, azimuth, backazimuth = gps2dist_azimuth(
-                lat1=row.latitude,
-                lon1=row.longitude,
-                lat2=event["latitude"],
-                lon2=event["longitude"],
-            )
-            distance = locations2degrees(
-                lat1=row.latitude,
-                long1=row.longitude,
-                lat2=event["latitude"],
-                long2=event["longitude"],
-            )
-            # Append results to lists
-            backazimuth_list.append(backazimuth)
-            distance_list.append(distance)
-        # Add the new columns to the DataFrame
-        available_stations["backazimuth"] = backazimuth_list
-        available_stations["distance"] = distance_list
+
+        available_stations = add_distance_backazimuth_to_df(available_stations, event)
         available_stations = available_stations.drop(columns=["geometry"])
 
     print(available_stations)
