@@ -13,6 +13,8 @@ from fault_processing import compute_shapely_polygon
 from retrieve_waveforms import get_station_data
 from waveform_figure_utils import initialize_client
 from obspy import read_inventory
+from obspy.core.inventory import Inventory
+from geodetic_utils import add_distance_backazimuth_to_df
 
 
 def retrieve_coordinates(client_name, event, station_codes):
@@ -37,31 +39,42 @@ def retrieve_coordinates(client_name, event, station_codes):
         client = initialize_client(client_name)
 
         event_time = UTCDateTime(event["onset"])
-
-        for ins, netStaCode in enumerate(station_codes):
-            listNetStaCode = netStaCode.split(".")
-            if len(listNetStaCode) == 1:
-                station = netStaCode
-                network = "*"
+        networks = set([entry.split(".")[0] for entry in station_codes])
+        print(networks)
+        inv = Inventory()
+        for net in networks:
+            fn_inventory = f"{path_observations}/inv_stations_{net}.xml"
+            if os.path.exists(fn_inventory):
+                inventory = read_inventory(fn_inventory)
             else:
-                network, station = listNetStaCode
-
-            inventory = get_station_data(
-                client,
-                network,
-                [station],
-                "station",
-                event_time,
-                event_time + 100,
-                network_wise=False,
-            )
+                inventory = client.get_stations(
+                    network=net,
+                    level="station",
+                    starttime=event_time,
+                    endtime=event_time + 100,
+                    includeavailability=True,
+                )
+                inventory.write(fn_inventory, format="STATIONXML")
+            inv.extend(inventory)
+        network_station_pairs = [code.split(".") for code in station_codes]
+        extracted_data = [
+            (network.code, station.code, station.longitude, station.latitude)
+            for network in inv.networks
+            for station in network.stations
+            if [network.code, station.code] in network_station_pairs
+        ]
+        print(extracted_data)
+        for vals in extracted_data:
+            net, sta, lon, lat = vals
             new_row = {
-                "network": inventory[0].code,
-                "station": inventory[0][0].code,
-                "longitude": inventory[0][0].longitude,
-                "latitude": inventory[0][0].latitude,
+                "network": net,
+                "station": sta,
+                "longitude": lon,
+                "latitude": lat,
             }
             df.loc[len(df)] = new_row
+
+    df = add_distance_backazimuth_to_df(df, event)
     return df
 
 
@@ -90,7 +103,15 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
         y1, y2 = min(event["latitude"], y.min()), max(event["latitude"], y.max())
         dx = 0.2 * (x2 - x1)
         dy = 0.2 * (y2 - y1)
-        ax.set_extent([x1 - dx, x2 + dx, y1 - dy, y2 + dy], ccrs.PlateCarree())
+        ax.set_extent(
+            [
+                max(-180, x1 - dx),
+                min(180, x2 + dx),
+                max(-90, y1 - dy),
+                min(90, y2 + dy),
+            ],
+            ccrs.PlateCarree(),
+        )
     names = df["station"].values
     plt.scatter(
         x, y, 200, color="r", marker="v", edgecolor="k", zorder=3, transform=geo
