@@ -19,6 +19,14 @@ from waveform_figure_utils import (
 from itertools import cycle
 import pickle
 import glob
+import pandas as pd
+
+# Ensure all rows and columns are displayed
+pd.set_option("display.max_rows", None)  # Show all rows
+pd.set_option("display.max_columns", None)  # Show all columns
+pd.set_option("display.width", 1000)  # Set a large width for the table
+pd.set_option("display.colheader_justify", "center")  # Center column headers (optional)
+
 
 parser = argparse.ArgumentParser(
     description=(
@@ -58,7 +66,7 @@ for source_file in source_files:
             all_files.append(source_file)
     # check for all point source files in the folder
     elif os.path.isdir(source_file):
-        pattern = os.path.join(source_file, "PointSource*.h5")
+        pattern = os.path.join(source_file, "*ointSource*.h5")
         files_in_folder = glob.glob(pattern)
         print(files_in_folder)
         all_files.extend(files_in_folder)
