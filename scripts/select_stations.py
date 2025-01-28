@@ -260,7 +260,9 @@ def parse_arguments():
     parser.add_argument(
         "closest_stations", type=int, help="Number of the closest station to select."
     )
-
+    parser.add_argument(
+        "--channel", default=["*"], help="filter channels to be retrieved"
+    )
     parser.add_argument(
         "--azimuthal",
         action="store_true",
@@ -277,12 +279,21 @@ def read_config(config_file):
 
 
 def load_or_create_inventory(
-    client, client_name, event, path_observations, spatial_range, t_before, t_after
+    client,
+    client_name,
+    event,
+    path_observations,
+    spatial_range,
+    t_before,
+    t_after,
+    channel,
 ):
     fn_inventory = f"{path_observations}/inv_{client_name}.xml"
     if os.path.exists(fn_inventory):
         inventory = read_inventory(fn_inventory)
     else:
+        if channel != "*":
+            print(f"filtering channels, channel = {channel}")
         starttime = event["onset"] - t_before
         endtime = event["onset"] + t_after
         kargs = {}
@@ -298,20 +309,44 @@ def load_or_create_inventory(
             kargs["latitude"] = event["latitude"]
             kargs["longitude"] = event["longitude"]
             if r1 > 30:
-                print("Warning: restricting to networks IU for teleseismic")
-                kargs["network"] = "IU"
+                kargs["network"] = "IU,II,GE,G"
+                print(
+                    f"Warning: restricting to networks {kargs['network']} for teleseismic"
+                )
+
         print(kargs)
-        inventory = client.get_stations(
-            starttime=starttime,
-            endtime=endtime,
-            level="channel",
-            channel="*",
-            includerestricted=False,
-            includeavailability=True,
-            **kargs,
-        )
-        inventory = filter_channels_by_availability(inventory, starttime, endtime)
+        level = "channel"
+        if client_name in ["NCEDC"]:
+            level = "station"
+            print(
+                f"{client_name} won't return channel information for multiple station\
+            using level = {level}"
+            )
+        try:
+            inventory = client.get_stations(
+                starttime=starttime,
+                endtime=endtime,
+                level=level,
+                channel=channel,
+                includerestricted=False,
+                includeavailability=True,
+                **kargs,
+            )
+        except TypeError:
+            # TypeError: The parameter 'includerestricted' is not supported by the service.
+            inventory = client.get_stations(
+                starttime=starttime,
+                endtime=endtime,
+                level=level,
+                channel=channel,
+                includeavailability=True,
+                **kargs,
+            )
+        if level == "channel":
+            inventory = filter_channels_by_availability(inventory, starttime, endtime)
         inventory.write(fn_inventory, format="STATIONXML")
+
+    inventory = inventory.select(channel=channel)
     return inventory
 
 
@@ -429,11 +464,12 @@ if __name__ == "__main__":
             spatial_range,
             t_before,
             t_before,
+            args.channel[0],
         )
         inventory = remove_synthetics_from_inventory(inventory)
         filtered_networks = [net for net in inventory.networks if net.code != "AM"]
         new_inventory = Inventory(networks=filtered_networks, source=inventory.source)
-        all_stations = new_inventory.get_contents()['stations']
+        all_stations = new_inventory.get_contents()["stations"]
         if len(all_stations) > (args.number_stations):
             print("remove AM network")
             inventory = new_inventory

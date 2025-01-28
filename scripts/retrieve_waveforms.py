@@ -74,6 +74,10 @@ def filter_channels_by_availability(inventory, starttime, endtime):
 
         for station in network:
             filtered_channels = []
+            if len(station) == 0:
+                print(f"no channel information for {network.code}.{station.code}")
+                filtered_stations.append(station)
+                continue
 
             for channel in station:
                 # Check if channel has data availability information
@@ -94,7 +98,7 @@ def filter_channels_by_availability(inventory, starttime, endtime):
                 station.channels = filtered_channels
                 filtered_stations.append(station)
             else:
-                code_station_removed.append(station.code)
+                code_station_removed.append(f"{network.code}.{station.code}")
 
         # Only keep network if it has any stations left
         if filtered_stations:
