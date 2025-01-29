@@ -261,7 +261,14 @@ def parse_arguments():
         "closest_stations", type=int, help="Number of the closest station to select."
     )
     parser.add_argument(
-        "--channel", default=["*"], help="filter channels to be retrieved"
+        "--distance_range",
+        type=float,
+        help="distance range from selecting stations (degrees)",
+        nargs=2,
+    )
+
+    parser.add_argument(
+        "--channel", default="*", type=str, help="filter channels to be retrieved"
     )
     parser.add_argument(
         "--azimuthal",
@@ -314,34 +321,25 @@ def load_or_create_inventory(
                     f"Warning: restricting to networks {kargs['network']} for teleseismic"
                 )
 
-        print(kargs)
-        level = "channel"
         if client_name in ["NCEDC"]:
             level = "station"
             print(
                 f"{client_name} won't return channel information for multiple station\
             using level = {level}"
             )
-        try:
-            inventory = client.get_stations(
-                starttime=starttime,
-                endtime=endtime,
-                level=level,
-                channel=channel,
-                includerestricted=False,
-                includeavailability=True,
-                **kargs,
-            )
-        except TypeError:
-            # TypeError: The parameter 'includerestricted' is not supported by the service.
-            inventory = client.get_stations(
-                starttime=starttime,
-                endtime=endtime,
-                level=level,
-                channel=channel,
-                includeavailability=True,
-                **kargs,
-            )
+        else:
+            level = "channel"
+            kargs["includerestricted"] = False
+
+        inventory = client.get_stations(
+            starttime=starttime,
+            endtime=endtime,
+            level=level,
+            channel=channel,
+            includeavailability=True,
+            **kargs,
+        )
+
         if level == "channel":
             inventory = filter_channels_by_availability(inventory, starttime, endtime)
         inventory.write(fn_inventory, format="STATIONXML")
@@ -437,7 +435,10 @@ if __name__ == "__main__":
 
         t_before = 1000
         t_after = signal_length + 1000
-        spatial_range["radius"] = [30, 90]
+        spatial_range["radius"] = [30.0, 90.0]
+
+    if args.distance_range:
+        spatial_range["radius"] = args.distance_range
 
     if client_name in ["eida-routing", "iris-federator"]:
         client = RoutingClient(client_name)
@@ -464,7 +465,7 @@ if __name__ == "__main__":
             spatial_range,
             t_before,
             t_before,
-            args.channel[0],
+            args.channel,
         )
         inventory = remove_synthetics_from_inventory(inventory)
         filtered_networks = [net for net in inventory.networks if net.code != "AM"]
@@ -577,6 +578,7 @@ if __name__ == "__main__":
             endtime,
             processed_data=processed_data,
             output_format="sac",
+            channel=args.channel,
         )
 
         retrieved_stations = list(retrieved_waveforms.keys())

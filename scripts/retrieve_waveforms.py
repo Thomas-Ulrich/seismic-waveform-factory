@@ -38,7 +38,7 @@ def save_station_data(inventory, level, cache_dir):
                 cache_dir, f"{net.code}_{sta.code}_{level}.xml"
             )
             station_inv.write(station_cache_file, format="STATIONXML")
-            print(f"Saved data for station {net.code}.{sta.code}")
+            print(f"Saved station data {net.code}.{sta.code}")
 
 
 def filter_channels_by_availability(inventory, starttime, endtime):
@@ -115,7 +115,9 @@ def filter_channels_by_availability(inventory, starttime, endtime):
         )
         print(code_station_removed)
     else:
-        print(f"no station removed based on data availability")
+        station_count_ini = sum(len(network.stations) for network in inventory)
+        if station_count_ini > 1:
+            print(f"no station removed based on data availability")
 
     return filtered_inventory
 
@@ -173,9 +175,7 @@ def get_station_data(client, network, stations, level, t1, t2, network_wise=True
     return inv
 
 
-def get_waveforms(
-    client, network, station, selected_band, t1, t2, is_routing_client=False
-):
+def get_waveforms(client, network, station, selected_band, t1, t2):
     max_retries = 1
     exceptions_to_catch = (
         FDSNException,
@@ -185,21 +185,16 @@ def get_waveforms(
         ConnectionError,
     )
     st_obs0 = False
-    if is_routing_client:
-        kwargs = {}
-    else:
-        kwargs = {"attach_response": True}
 
     for retry_count in range(max_retries):
         try:
             st_obs0 = client.get_waveforms(
                 network=network,
                 station=station,
-                location="00",
-                channel=f"{selected_band}*",
+                location="00,",
+                channel=f"{selected_band}",
                 starttime=t1,
                 endtime=t2,
-                **kwargs,
             )
             if not st_obs0:
                 print(f"Got empty stream for {network} {station}")
@@ -215,7 +210,7 @@ def get_waveforms(
             continue
 
     if not st_obs0:
-        print(f"No waveform available for {station}")
+        print(f"No waveform available for {network}.{station}")
 
     return st_obs0
 
@@ -253,6 +248,7 @@ def _retrieve_waveforms(
     t1,
     t2,
     output_format,
+    selected_channels,
 ):
     if client_name in ["eida-routing", "iris-federator"]:
         client = RoutingClient(client_name)
@@ -313,28 +309,28 @@ def _retrieve_waveforms(
             inventory = get_station_data(
                 client, network, stations, level, t1, t2, network_wise=False
             )
-        print(inventory)
         if len(inventory) == 0:
             print(f"could not get {level} for {network}")
             continue
 
         for station in [sta for net in inventory for sta in net]:
             code = f"{network}.{station.code}"
-            print(f"requesting data for {network}.{station.code}")
+            print(f"requesting waveform data for {network}.{station.code}")
             channels = [channel.code for channel in station]
 
             # Get waveforms for all channels
             st_obs0 = get_waveforms(
-                client, network, station.code, "*", t1, t2, is_routing_client
+                client, network, station.code, selected_channels, t1, t2
             )
             if not st_obs0:
-                print(f"No data retrieved for station {network}.{station.code}")
                 continue
+
+            st_obs0.attach_response(inventory)
 
             # Dynamically select a band with actual data
             selected_band = select_band_with_data(st_obs0, channels)
             if not selected_band:
-                print(f"No valid data at station {station.code}")
+                print(f"No valid waveform data at station {station.code}")
                 continue
 
             # Filter the stream for the selected band
@@ -472,7 +468,9 @@ def write_sac_files(st_obs0, inventory, path_observations):
         tr.write(fullfname, format="SAC")
 
         # Write SAC pole-zero file
-        pz_fname = f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_{tr.stats.channel}_{tr.stats.location}"
+        location_padded = tr.stats.location.ljust(2, "_")
+
+        pz_fname = f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_{tr.stats.channel}_{location_padded}"
         fullfname_pz = os.path.join(path_observations, pz_fname)
         inv_channel.write(fullfname_pz, format="SACPZ")
         print(f"done writing {fullfname_pz}")
@@ -526,6 +524,7 @@ def handle_station(
     endtime,
     output_format,
     processed_data,
+    channel,
 ):
     """Handle a single station: read preprocessed or retrieve raw waveforms."""
     network, station = code.split(".")
@@ -552,6 +551,7 @@ def handle_station(
         starttime,
         endtime,
         output_format,
+        channel,
     )
     if code in retrieved_waveforms_tmp:
         return code, retrieved_waveforms_tmp[code]
@@ -569,7 +569,8 @@ def retrieve_waveforms(
     endtime,
     processed_data={},
     output_format="mseed",
-    parallel=True,
+    parallel=False,
+    channel="*",
 ):
     retrieved_waveforms = {}
     assert output_format in ["sac", "mseed"]
@@ -583,6 +584,7 @@ def retrieve_waveforms(
         endtime=endtime,
         processed_data=processed_data,
         output_format=output_format,
+        channel=channel,
     )
 
     if parallel:
