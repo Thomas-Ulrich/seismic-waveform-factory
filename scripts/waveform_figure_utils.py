@@ -8,7 +8,7 @@ from lxml.etree import XMLSyntaxError
 import gzip
 import pickle
 import os
-from retrieve_waveforms import get_station_data
+from retrieve_waveforms import get_station_data, initialize_client
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
@@ -92,32 +92,12 @@ def compile_station_coords_main(station_codes, station_file, client_name, t1):
     return station_coords
 
 
-def initialize_client(client_name):
-    exceptions_to_catch = (UnicodeDecodeError,)
-    max_retries = 5
-
-    for retry_count in range(max_retries):
-        try:
-            if client_name in ["eida-routing", "iris-federator"]:
-                return RoutingClient(client_name)
-            else:
-                return Client(client_name)
-        except exceptions_to_catch as e:
-            print(f"Error initializing client: {e.__class__.__name__}")
-            if retry_count == max_retries - 1:
-                raise Exception(
-                    f"Max retry count reached while initializing client: {e}"
-                )
-
-
 def parse_network_station(netStaCode):
     parts = netStaCode.split(".")
     return ("*", parts[0]) if len(parts) == 1 else (parts[0], parts[1])
 
 
 def compile_list_inventories(client_name, station_codes, t1):
-    # Initialize client
-    client = initialize_client(client_name)
     # Prepare cache directory
     cache_dir = "observations"
     os.makedirs(cache_dir, exist_ok=True)
@@ -126,7 +106,7 @@ def compile_list_inventories(client_name, station_codes, t1):
         network, station = parse_network_station(netStaCode)
         # response because we will need it anyway at some point
         return get_station_data(
-            client, network, [station], "*", "response", t1, t1 + 100.0, cache_dir
+            client_name, network, [station], "*", "response", t1, t1 + 100.0, cache_dir
         )
 
     # Use ThreadPoolExecutor to process station codes in parallel

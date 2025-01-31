@@ -13,6 +13,24 @@ from functools import partial
 import glob
 
 
+def initialize_client(client_name):
+    exceptions_to_catch = (UnicodeDecodeError,)
+    max_retries = 5
+
+    for retry_count in range(max_retries):
+        try:
+            if client_name in ["eida-routing", "iris-federator"]:
+                return RoutingClient(client_name)
+            else:
+                return Client(client_name)
+        except exceptions_to_catch as e:
+            print(f"Error initializing client: {e.__class__.__name__}")
+            if retry_count == max_retries - 1:
+                raise Exception(
+                    f"Max retry count reached while initializing client: {e}"
+                )
+
+
 def load_cached_station_data(network, stations, level, cache_dir):
     inv = Inventory()
     stations_not_cached = []
@@ -82,7 +100,6 @@ def filter_channels_by_availability(inventory, starttime, endtime):
             for channel in station:
                 # Check if channel has data availability information
                 if channel.data_availability:
-
                     # Check if the requested time window is included in channel availability
                     chan_start = channel.data_availability.start
                     chan_end = channel.data_availability.end
@@ -122,7 +139,9 @@ def filter_channels_by_availability(inventory, starttime, endtime):
     return filtered_inventory
 
 
-def get_station_data(client, network, stations, channel, level, t1, t2, network_wise=True):
+def get_station_data(
+    client_or_clientname, network, stations, channel, level, t1, t2, network_wise=True
+):
     exceptions_to_catch = (
         FDSNException,
         FDSNNoDataException,
@@ -137,6 +156,10 @@ def get_station_data(client, network, stations, channel, level, t1, t2, network_
     )
     if not stations_not_cached:
         return inv
+
+    # Initialize client
+    client = initialize_client(client_or_clientname)
+
     if network_wise:
         station_param = [",".join(stations_not_cached)]
     else:
@@ -149,7 +172,7 @@ def get_station_data(client, network, stations, channel, level, t1, t2, network_
             try:
                 if retry_count == 0:
                     print(f"Getting {level}s for {retry_message}...")
-                inventory = client.get_stations(
+                inventory = client_or_clientname.get_stations(
                     network=network,
                     station=station,
                     channel=channel,
@@ -252,11 +275,10 @@ def _retrieve_waveforms(
     selected_channels,
 ):
     level = "response"
+    client_initialized = False
     if client_name in ["eida-routing", "iris-federator"]:
-        client = RoutingClient(client_name)
         is_routing_client = True
     else:
-        client = Client(client_name)
         is_routing_client = False
 
     os.makedirs(path_observations, exist_ok=True)
@@ -300,14 +322,30 @@ def _retrieve_waveforms(
 
         if not stations:
             continue
+        if not client_initialized:
+            client = initialize_client(client_name)
 
         if level == "channel":
             inventory = get_station_data(
-                client, network, stations, selected_channels, level, t1, t2, network_wise=True
+                client,
+                network,
+                stations,
+                selected_channels,
+                level,
+                t1,
+                t2,
+                network_wise=True,
             )
         else:
             inventory = get_station_data(
-                client, network, stations, selected_channels, level, t1, t2, network_wise=False
+                client,
+                network,
+                stations,
+                selected_channels,
+                level,
+                t1,
+                t2,
+                network_wise=False,
             )
         if len(inventory) == 0:
             print(f"could not get {level} for {network}")
@@ -485,7 +523,6 @@ def retrieve_waveforms_preprocessed(
     endtime,
     processed_data,
 ):
-
     keys_to_check = {"directory", "wf_kind", "wf_factor", "station_files"}
     if keys_to_check.issubset(processed_data.keys()):
         processed_waveforms = processed_data["directory"]
@@ -590,7 +627,6 @@ def retrieve_waveforms(
     if parallel:
         # Use ThreadPoolExecutor for parallel processing
         with ThreadPoolExecutor(max_workers=10) as executor:
-
             # Submit tasks for all stations
             futures = {
                 executor.submit(handle_station_partial, code): code
