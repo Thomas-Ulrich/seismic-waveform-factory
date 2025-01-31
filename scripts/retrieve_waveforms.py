@@ -122,7 +122,7 @@ def filter_channels_by_availability(inventory, starttime, endtime):
     return filtered_inventory
 
 
-def get_station_data(client, network, stations, level, t1, t2, network_wise=True):
+def get_station_data(client, network, stations, channel, level, t1, t2, network_wise=True):
     exceptions_to_catch = (
         FDSNException,
         FDSNNoDataException,
@@ -152,6 +152,7 @@ def get_station_data(client, network, stations, level, t1, t2, network_wise=True
                 inventory = client.get_stations(
                     network=network,
                     station=station,
+                    channel=channel,
                     level=level,
                     starttime=t1,
                     endtime=t2,
@@ -250,14 +251,13 @@ def _retrieve_waveforms(
     output_format,
     selected_channels,
 ):
+    level = "response"
     if client_name in ["eida-routing", "iris-federator"]:
         client = RoutingClient(client_name)
         is_routing_client = True
-        level = "response"
     else:
         client = Client(client_name)
         is_routing_client = False
-        level = "response"
 
     os.makedirs(path_observations, exist_ok=True)
     retrieved_waveforms = {}
@@ -303,11 +303,11 @@ def _retrieve_waveforms(
 
         if level == "channel":
             inventory = get_station_data(
-                client, network, stations, level, t1, t2, network_wise=True
+                client, network, stations, selected_channels, level, t1, t2, network_wise=True
             )
         else:
             inventory = get_station_data(
-                client, network, stations, level, t1, t2, network_wise=False
+                client, network, stations, selected_channels, level, t1, t2, network_wise=False
             )
         if len(inventory) == 0:
             print(f"could not get {level} for {network}")

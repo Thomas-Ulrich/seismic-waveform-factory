@@ -15,6 +15,9 @@ from waveform_figure_utils import initialize_client
 from obspy import read_inventory
 from obspy.core.inventory import Inventory
 from geodetic_utils import add_distance_backazimuth_to_df
+from scalebar import scale_bar
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+import matplotlib.ticker as mticker
 
 
 def retrieve_coordinates(client_name, event, station_codes):
@@ -112,6 +115,18 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
             ],
             ccrs.PlateCarree(),
         )
+    else:
+        # Add Latitude and Longitude Gridlines
+        gl = ax.gridlines(draw_labels=True, linewidth=0.5, color="gray", alpha=0.5)
+        gl.top_labels = False
+        gl.right_labels = False
+        gl.xformatter = LONGITUDE_FORMATTER
+        gl.yformatter = LATITUDE_FORMATTER
+        gl.xlocator = mticker.FixedLocator(np.arange(-180, 181, 0.5))  # Adjust as needed
+        gl.ylocator = mticker.FixedLocator(np.arange(-90, 91, 0.5))  # Adjust as needed
+
+
+
     names = df["station"].values
     plt.scatter(
         x, y, 200, color="r", marker="v", edgecolor="k", zorder=3, transform=geo
@@ -152,6 +167,10 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
             bbox=bbox,
             transform=geo,
         )
+
+    # Add scale bar
+    scale_bar(ax, (0.1, 0.1), 50)
+
     if set_global:
         ax.set_global()
     if setup_name != "":
