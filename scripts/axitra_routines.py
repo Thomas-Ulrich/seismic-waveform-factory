@@ -141,11 +141,14 @@ def generate_synthetics_axitra(
         if not latlon:
             print("sources", sources)
             if len(sources) == 0:
-              # we need to use a projection anyway
-              print("Warning, {fname} has no sources")
-              lat0, lon0 = stations_array_axitra[0,1]+0.01, stations_array_axitra[0,2]+0.01
+                # we need to use a projection anyway
+                print("Warning, {fname} has no sources")
+                lat0, lon0 = (
+                    stations_array_axitra[0, 1] + 0.01,
+                    stations_array_axitra[0, 2] + 0.01,
+                )
             else:
-              lat0, lon0 = sources[:, 1].mean(), sources[:, 2].mean()
+                lat0, lon0 = sources[:, 1].mean(), sources[:, 2].mean()
             proj = f"+proj=tmerc +datum=WGS84 +k=0.9996 +lon_0={lon0} +lat_0={lat0}"
             transformer = Transformer.from_crs("epsg:4326", proj, always_xy=False)
 

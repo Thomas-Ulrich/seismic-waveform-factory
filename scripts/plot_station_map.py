@@ -122,10 +122,10 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
         gl.right_labels = False
         gl.xformatter = LONGITUDE_FORMATTER
         gl.yformatter = LATITUDE_FORMATTER
-        gl.xlocator = mticker.FixedLocator(np.arange(-180, 181, 0.5))  # Adjust as needed
+        gl.xlocator = mticker.FixedLocator(
+            np.arange(-180, 181, 0.5)
+        )  # Adjust as needed
         gl.ylocator = mticker.FixedLocator(np.arange(-90, 91, 0.5))  # Adjust as needed
-
-
 
     names = df["station"].values
     plt.scatter(
