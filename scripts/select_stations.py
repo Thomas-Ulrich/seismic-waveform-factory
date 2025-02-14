@@ -500,7 +500,11 @@ if __name__ == "__main__":
             closest_stations["longitude"], closest_stations["latitude"]
         )
         n_seissol_station = len(closest_stations)
-        for k in [n_seissol_station, 5]:
+        nstations_in_file = [n_seissol_station]
+        if n_seissol_station > 5:
+            nstations_in_file.append(5)
+
+        for k in nstations_in_file:
             fname = f"tmp/seissol_station_{k}.txt"
             os.makedirs("tmp", exist_ok=True)
             with open(fname, "w") as fid:
