@@ -271,6 +271,14 @@ def parse_arguments():
         "--channel", default="*", type=str, help="filter channels to be retrieved"
     )
     parser.add_argument(
+        "--store_format",
+        choices=["sac", "mseed"],
+        default="mseed",
+        type=str,
+        help="store format for waveform data",
+    )
+
+    parser.add_argument(
         "--azimuthal",
         action="store_true",
         help="Select stations based on back-azimuth (else based on distance).",
@@ -521,7 +529,6 @@ if __name__ == "__main__":
         print("available (no restrictions):")
 
     if args.azimuthal:
-
         available_stations = add_distance_backazimuth_to_df(available_stations, event)
         available_stations = available_stations.drop(columns=["geometry"])
 
@@ -577,7 +584,7 @@ if __name__ == "__main__":
             starttime,
             endtime,
             processed_data=processed_data,
-            output_format="sac",
+            output_format=args.store_format,
             channel=args.channel,
         )
 

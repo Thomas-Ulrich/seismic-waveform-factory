@@ -17,6 +17,8 @@ def initialize_client(client_name):
     exceptions_to_catch = (UnicodeDecodeError,)
     max_retries = 5
 
+    assert isinstance(client_name, str)
+
     for retry_count in range(max_retries):
         try:
             if client_name in ["eida-routing", "iris-federator"]:
@@ -158,7 +160,8 @@ def get_station_data(
         return inv
 
     # Initialize client
-    client = initialize_client(client_or_clientname)
+    if isinstance(client_or_clientname, str):
+        client = initialize_client(client_or_clientname)
 
     if network_wise:
         station_param = [",".join(stations_not_cached)]
