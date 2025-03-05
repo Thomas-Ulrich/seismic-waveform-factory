@@ -205,6 +205,8 @@ if __name__ == "__main__":
     event_lat = config.getfloat("GENERAL", "hypo_lat")
     event = {"longitude": event_lon, "latitude": event_lat, "onset": onset}
     station_codes = config.get("GENERAL", "stations").split(",")
+    station_codes = [x.strip() for x in station_codes]
+
     software = config.get("GENERAL", "software").split(",")
     set_global = "axitra" not in software
     station_file = config.get("GENERAL", "station_file", fallback=None)
