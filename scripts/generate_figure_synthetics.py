@@ -54,7 +54,7 @@ projection = config.get("GENERAL", "projection", fallback=None)
 source_files = config.get("GENERAL", "source_files").split(",")
 source_files = [val.strip() for val in source_files]
 
-seissol_outputs = config.get("GENERAL", "seissol_outputs", fallback=None)
+seissol_outputs = config.get("GENERAL", "seissol_outputs", fallback=[])
 if seissol_outputs:
     seissol_outputs = [val.strip() for val in seissol_outputs.split(",")]
     assert projection != None
@@ -125,7 +125,7 @@ def extend_if_necessary(colors, n, name):
     return colors
 
 
-n = len(source_files)
+n = len(source_files) + len(seissol_outputs)
 colors = extend_if_necessary(colors, n, "colors")
 line_widths = extend_if_necessary(line_widths, n, "line_widths")
 
@@ -257,7 +257,7 @@ if seissol_outputs:
     from seissol_receiver_processing import collect_seissol_synthetics
 
     list_synthetics = collect_seissol_synthetics(
-        seissol_outputs, station_coords, projection, t1
+        seissol_outputs, station_coords, projection, t1, kind_vd
     )
     list_synthetics_all += list_synthetics
 

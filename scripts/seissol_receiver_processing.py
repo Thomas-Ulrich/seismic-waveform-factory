@@ -88,7 +88,7 @@ def get_station_code_from_coordinates(station_coords, lonlatdepth, eps=5e-3):
 
 
 def stream_from_seissol_data(
-    network_code, station_code, variable_list, synth, starttime
+    network_code, station_code, variable_list, synth, starttime, kind_vd
 ):
     """
     Load SeisSol receiver data into an ObsPy Stream object.
@@ -99,6 +99,7 @@ def stream_from_seissol_data(
         variable_list (list or np.ndarray): A list or array of variable names.
         synth (np.ndarray): The seismogram data.
         starttime (obspy.UTCDateTime): The start time of the seismogram.
+        kind_vd (string): acceleration, velocity or displacement
 
     Returns:
         obspy.Stream: A Stream object containing the seismogram data.
@@ -124,6 +125,15 @@ def stream_from_seissol_data(
         tr.stats.delta = synth[1, 0] - synth[0, 0]
         tr.stats.starttime = starttime
         st_syn.append(tr)
+
+    if kind_vd == "acceleration":
+        st_syn.differentiate()
+    elif kind_vd == "velocity":
+        pass
+    elif kind_vd == "displacement":
+        st_syn.integrate()
+    else:
+        raise ValueError(f"unknown kind_vd {kind_vd}")
 
     return st_syn
 
@@ -199,7 +209,9 @@ def compile_inv_lut_gm(folder_prefix, projection, station_coords):
     return inv_station_lookup_table
 
 
-def collect_seissol_synthetics(seissol_outputs, station_coords, projection, t1):
+def collect_seissol_synthetics(
+    seissol_outputs, station_coords, projection, t1, kind_vd
+):
     """
     Collect synthetic seismograms from SeisSol outputs.
 
@@ -208,6 +220,7 @@ def collect_seissol_synthetics(seissol_outputs, station_coords, projection, t1):
         station_coords (dict): A dictionnary of station coordinates indexed by station code
         projection (str or pyproj.Proj): The projection to use for coordinate transformations.
         t1 (obspy.UTCDateTime): The start time of the seismograms.
+        kind_vd (string): acceleration, velocity or displacement
 
     Returns:
         list: A list of ObsPy Stream objects containing synthetic seismograms.
@@ -228,7 +241,9 @@ def collect_seissol_synthetics(seissol_outputs, station_coords, projection, t1):
                 xyzs, variablelist, synth = read_seissol_receiver_file(
                     seissol_output, id_station
                 )
-                syn_st += stream_from_seissol_data(net, sta, variablelist, synth, t1)
+                syn_st += stream_from_seissol_data(
+                    net, sta, variablelist, synth, t1, kind_vd
+                )
             else:
                 print(f"Station {station_code} not found in SeisSol receivers")
                 syn_st += create_zero_stream(net, sta, t1)
