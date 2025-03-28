@@ -125,9 +125,13 @@ def extend_if_necessary(colors, n, name):
     return colors
 
 
-n = len(source_files) + len(seissol_outputs)
-colors = extend_if_necessary(colors, n, "colors")
-line_widths = extend_if_necessary(line_widths, n, "line_widths")
+n_seissol_model = len(seissol_outputs)
+n_kinematic_model = len(source_files)
+n_syn_model = n_software * n_kinematic_model + n_seissol_model
+print("n_syn_model:", n_syn_model)
+
+colors = extend_if_necessary(colors, n_syn_model, "colors")
+line_widths = extend_if_necessary(line_widths, n_syn_model, "line_widths")
 
 
 path_observations = config.get("GENERAL", "path_observations")
@@ -180,7 +184,6 @@ station_coords = reorder_station_coords_from_azimuth(station_coords, hypo_lon, h
 print(station_coords)
 
 nstations = len(station_coords)
-n_kinematic_models = len(source_files)
 
 Pwave = WaveformFigureGenerator(
     "P",
@@ -192,7 +195,7 @@ Pwave = WaveformFigureGenerator(
     Pwave_ncol_per_component,
     nstations,
     ["Z"],
-    n_software * n_kinematic_models,
+    n_syn_model,
     kind_misfit,
     colors,
     line_widths,
@@ -211,7 +214,7 @@ SHwave = WaveformFigureGenerator(
     SHwave_ncol_per_component,
     nstations,
     ["T"],
-    n_software * n_kinematic_models,
+    n_syn_model,
     kind_misfit,
     colors,
     line_widths,
@@ -230,7 +233,7 @@ surface_waves = WaveformFigureGenerator(
     surface_waves_ncol_per_component,
     nstations,
     surface_waves_components,
-    n_software * n_kinematic_models,
+    n_syn_model,
     kind_misfit,
     colors,
     line_widths,
@@ -240,14 +243,13 @@ surface_waves = WaveformFigureGenerator(
     annotations,
 )
 
-
 components = ["E", "N", "Z"]
 
 if Pwave_enabled and not (SHwave_enabled or surface_waves_enabled):
     # we do not need to compute E and N if Pwave only
     components = ["Z"]
 
-gofall = [0 for i in range(len(source_files))]
+gofall = [0 for i in range(n_syn_model)]
 
 list_synthetics_all = []
 t_obs_before, t_obs_after = 100, 400
@@ -386,8 +388,13 @@ file_id = (
     .str.extract(r"[^0-9]+([0-9]+)", expand=False)
     .astype(int)
 )
-nsources = len(source_files)
-df_station_average["source_file"] = [source_files[k % nsources] for k in file_id]
+
+source_files_inc_seissol = [seissol_outputs[k] for k in range(n_seissol_model)] + [
+    source_files[(k - n_seissol_model) % n_kinematic_model]
+    for k in range(n_seissol_model, n_syn_model)
+]
+
+df_station_average["source_file"] = [source_files_inc_seissol[k] for k in file_id]
 print(df_station_average)
 
 fname = "gof_average.pkl"
