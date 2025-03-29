@@ -329,7 +329,9 @@ class WaveformFigureGenerator:
         start_time_interp = max(reftime + self.t_before, start_osTrace)
         end_time_interp = min(reftime + self.t_after, end_osTrace)
         f0 = self.filter_fmax * 10.0
-        npts_interp = int((end_time_interp - start_time_interp + 1.0) * f0)
+        npts_interp = (
+            np.floor((end_time_interp - start_time_interp) * f0).astype(int) + 1
+        )
         if npts_interp < 2:
             return 0, otrace.data[0] * self.scaling
         strace.interpolate(
