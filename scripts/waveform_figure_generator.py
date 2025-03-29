@@ -264,9 +264,16 @@ class WaveformFigureGenerator:
 
         # Compute rMRS misfit and print it on plot
         dist = otrace.stats.distance
+        distance_unit = otrace.stats.distance_unit
+        distance_unit = "°" if distance_unit == "degree" else distance_unit
         azimuth = otrace.stats.back_azimuth
         n_kinematic_models = len(lst_copy)
-        temp_dic = {"station": station, "distance": dist, "azimuth": azimuth}
+        temp_dic = {
+            "station": station,
+            "distance": dist,
+            "azimuth": azimuth,
+            "distance_unit": distance_unit,
+        }
         for j, comp in enumerate(self.components):
             j0 = compute_j0(j)
             ymin0, ymax0 = self.axarr[ins, j0].get_ylim()
@@ -283,7 +290,7 @@ class WaveformFigureGenerator:
                     gofstrings += [f"{gof:.2f}"]
                 if j == 0 and ist == n_kinematic_models - 1:
                     if "distance" in self.annotations:
-                        annot += [f"d:{dist:.0f}°"]
+                        annot += [f"d:{dist:.0f}{distance_unit}"]
                     if "azimuth" in self.annotations:
                         annot += [f"a:{azimuth:.0f}°"]
                 if ist == n_kinematic_models - 1:

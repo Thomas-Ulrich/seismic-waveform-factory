@@ -20,6 +20,7 @@ from itertools import cycle
 import pickle
 import glob
 import pandas as pd
+from obspy.geodetics import degrees2kilometers
 
 # Ensure all rows and columns are displayed
 pd.set_option("display.max_rows", None)  # Show all rows
@@ -50,6 +51,7 @@ annotations = config.get(
 ).split(",")
 
 projection = config.get("GENERAL", "projection", fallback=None)
+distance_unit = config.get("GENERAL", "distance_unit", fallback="degree")
 
 source_files = config.get("GENERAL", "source_files").split(",")
 source_files = [val.strip() for val in source_files]
@@ -347,10 +349,13 @@ for ins, station_code in enumerate(station_coords):
         lst += [st_syn.select(station=station)]
     dist = locations2degrees(lat1=lat, long1=lon, lat2=hypo_lat, long2=hypo_lon)
     azimuth = gps2dist_azimuth(lat1=lat, lon1=lon, lat2=hypo_lat, lon2=hypo_lon)[2]
+    if distance_unit == "km":
+        dist = degrees2kilometers(dist)
     for st in [*lst, st_obs0]:
         for tr in st:
             tr.stats.back_azimuth = azimuth
             tr.stats.distance = dist
+            tr.stats.distance_unit = distance_unit
 
     if Pwave.enabled:
         tP = estimate_travel_time(hypo_depth_in_km, dist, station, "P")
