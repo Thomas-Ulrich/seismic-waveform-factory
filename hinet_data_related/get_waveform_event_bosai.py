@@ -45,8 +45,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 sorigin_time = args.origin_time_utc[0]
-processed_date = sorigin_time.replace(" ", "_").replace(":","_")
-outdir =  f"BOSAI_{processed_date}"
+processed_date = sorigin_time.replace(" ", "_").replace(":", "_")
+outdir = f"BOSAI_{processed_date}"
 
 origin_time = UTCDateTime(sorigin_time).datetime
 # UTC to Japan
@@ -55,9 +55,11 @@ origin_time += timedelta(hours=9)
 username, password = args.logging_data
 client = Client(username, password)
 lon, lat = args.hypocenter
-r1,r2 = args.radius_range
+r1, r2 = args.radius_range
 client.select_stations("0101", latitude=lat, longitude=lon, minradius=r1, maxradius=r2)
 
 # skip if outdir already exists to avoid overwrite
 if not os.path.exists(outdir):
-    data, ctable = client.get_continuous_waveform("0101", origin_time-timedelta(minutes=3), 8, outdir=outdir)
+    data, ctable = client.get_continuous_waveform(
+        "0101", origin_time - timedelta(minutes=3), 8, outdir=outdir
+    )

@@ -8,25 +8,20 @@ import os
 import pandas as pd
 import argparse
 
-data = {
-    "station": [], 
-    "lon": [],  
-    "lat": [],    
-    "network": [] 
-}
+data = {"station": [], "lon": [], "lat": [], "network": []}
 df = pd.DataFrame(data)
 
-parser = argparse.ArgumentParser(
-    description="convert kik net data to mseed"
-)
+parser = argparse.ArgumentParser(description="convert kik net data to mseed")
 parser.add_argument("data_folder", help="folder where the cnt and ch files are")
 args = parser.parse_args()
 
 
 folder_path = args.data_folder
-cnt_files = [f"{folder_path}/{f}" for f in os.listdir(folder_path) if f.endswith('.cnt')]
-ch_files = [f"{folder_path}/{f}" for f in os.listdir(folder_path) if f.endswith('.ch')]
-assert((len(cnt_files)==1) and (len(ch_files)==1))
+cnt_files = [
+    f"{folder_path}/{f}" for f in os.listdir(folder_path) if f.endswith(".cnt")
+]
+ch_files = [f"{folder_path}/{f}" for f in os.listdir(folder_path) if f.endswith(".ch")]
+assert (len(cnt_files) == 1) and (len(ch_files) == 1)
 
 sac_dir = f"{folder_path}_SAC"
 win32.extract_sac(cnt_files[0], ch_files[0], outdir=sac_dir, with_sacpz=True)
@@ -43,7 +38,7 @@ for sac_file in sac_files:
     st1 = read(sac_file)
     attach_paz(st1[0], f"{sac_file}_PZ")
     st1.simulate(paz_remove="self", paz_simulate=paz_25hz)
-    #st1.differentiate()
+    # st1.differentiate()
     st += st1
 
 stations = {f"{trace.stats.station}" for trace in st}
@@ -59,7 +54,7 @@ for sta in stations:
     network = "BO"
     kind, station = sta.split(".")
     if kind == "N":
-        #kind_vd = "acceleration"
+        # kind_vd = "acceleration"
         kind_vd = "velocity"
     else:
         kind_vd = "not_implemented"
@@ -77,7 +72,7 @@ for sta in stations:
 
     fname = f"{network}.{station}_{kind_vd}_{t1.date}.mseed"
     fullfname = os.path.join(path_observations, fname)
-    
+
     selected_stream.write(fullfname, format="MSEED")
 
 print(df)
