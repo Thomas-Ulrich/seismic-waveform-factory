@@ -149,7 +149,10 @@ def generate_synthetics_instaseis(
             for iModel, sources in enumerate(list_finite_sources):
                 prefix, _ = os.path.splitext(os.path.basename(source_files[iModel]))
                 c_time = os.path.getctime(source_files[iModel])
-                fname = f"{path_observations}/{prefix}_{c_time}_{station}_{kind_vd}_{t1.format_iris_web_service()}.mseed"
+                fname = (
+                    f"{path_observations}/{prefix}_{c_time}_{station}_{kind_vd}_"
+                    f"{t1.format_iris_web_service()}.mseed"
+                )
                 if os.path.isfile(fname):
                     print(f"reading the data from {fname}")
                     st0 = read(fname)

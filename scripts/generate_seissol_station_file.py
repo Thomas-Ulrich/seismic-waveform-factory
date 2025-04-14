@@ -1,11 +1,6 @@
-import numpy as np
 import configparser
-import os
 import glob
-import matplotlib.pyplot as plt
-from obspy import read, read_inventory
-from obspy.clients.nrl import NRL
-from obspy.core import UTCDateTime
+from obspy import read_inventory
 from pyproj import Transformer
 
 # Load the configuration file

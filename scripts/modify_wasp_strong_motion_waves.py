@@ -2,7 +2,6 @@
 import argparse
 import configparser
 import os
-import shutil
 from waveform_figure_utils import estimate_travel_time
 import json
 

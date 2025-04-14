@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from obspy import UTCDateTime, read
+from obspy import UTCDateTime
 from obspy.geodetics import locations2degrees
 from obspy.geodetics.base import gps2dist_azimuth
 import argparse
@@ -17,7 +17,6 @@ from waveform_figure_utils import (
     reorder_station_coords_from_azimuth,
 )
 from itertools import cycle
-import pickle
 import glob
 import pandas as pd
 from obspy.geodetics import degrees2kilometers
@@ -59,7 +58,7 @@ source_files = [val.strip() for val in source_files]
 seissol_outputs = config.get("GENERAL", "seissol_outputs", fallback=[])
 if seissol_outputs:
     seissol_outputs = [val.strip() for val in seissol_outputs.split(",")]
-    assert projection != None
+    assert projection is not None
 
 all_files = []
 for source_file in source_files:
