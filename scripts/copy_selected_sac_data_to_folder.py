@@ -6,15 +6,12 @@ import os
 import shutil
 
 
-from waveform_figure_utils import compile_station_coords_main, estimate_travel_time
-from obspy import UTCDateTime
-from obspy.geodetics import locations2degrees
-import json
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="move selected files to folder selected sac and update strong_motion_waves.json if available"
+        description=(
+            "move selected files to folder selected sac and update "
+            "strong_motion_waves.json if available"
+        )
     )
     parser.add_argument("config_file", help="config file describing event and stations")
     parser.add_argument(

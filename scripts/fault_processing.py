@@ -66,7 +66,8 @@ def compute_shapely_polygon(faultfname):
         # Find a cycle in the graph (assuming it's a single connected component)
         cycle = nx.find_cycle(G)
 
-        # Extract the node indices from the cycle and add the first node again to close the polygon
+        # Extract the node indices from the cycle and add the first node again to
+        # close the polygon
         node_indices = [edge[0] for edge in cycle] + [cycle[0][0]]
         # Create a polygon from the node indices
         poly_points = [edges.points[i, 0:2] for i in node_indices]

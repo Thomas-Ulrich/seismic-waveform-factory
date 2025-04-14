@@ -7,10 +7,8 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import argparse
 import configparser
-from obspy.clients.fdsn import Client, RoutingClient
 import os
 from fault_processing import compute_shapely_polygon
-from retrieve_waveforms import get_station_data
 from waveform_figure_utils import initialize_client
 from obspy import read_inventory
 from obspy.core.inventory import Inventory
@@ -26,7 +24,6 @@ def retrieve_coordinates(client_name, event, station_codes):
     if os.path.exists(fn_inventory):
         inventory = read_inventory(fn_inventory)
         for network in inventory:
-            filtered_stations = []
             for station in network:
                 code = f"{network.code}.{station.code}"
                 if code in station_codes:

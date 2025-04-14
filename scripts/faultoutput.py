@@ -22,15 +22,15 @@ class FaultOutput:
         self.unique_fault_tags = np.unique(self.fault_tags)
 
     def read_final_slip(self):
-        """store slip variable"""
+        """Store slip variable."""
         self.slip = self.sx.ReadData("ASl", self.ndt - 1)
 
     def get_rupture_time(self):
-        """return RT variable"""
+        """Return RT variable."""
         return self.sx.ReadData("RT", self.ndt - 1)
 
     def compute_strike_dip(self, refVector):
-        """compute strike and dip angles of each face of fault output"""
+        """Compute strike and dip angles of each face of fault output."""
         print("computing strike and dip angles...")
         un = np.cross(
             self.xyz[self.connect[:, 1], :] - self.xyz[self.connect[:, 0], :],
@@ -57,7 +57,7 @@ class FaultOutput:
         self.dip = np.arcsin(ud[2, :])
 
     def compute_rake(self, invertSld):
-        """compute rake angle of fault slip"""
+        """Compute rake angle of fault slip."""
         Sls = self.sx.ReadData("Sls", self.ndt - 1)
         Sld = self.sx.ReadData("Sld", self.ndt - 1)
         if invertSld:
@@ -67,7 +67,7 @@ class FaultOutput:
         self.rake = np.arctan2(Sld, -Sls)
 
     def compute_face_area(self):
-        """compute area of each triangle"""
+        """Compute area of each triangle."""
         print("computing area...")
         cross0 = np.cross(
             self.xyz[self.connect[:, 1], :] - self.xyz[self.connect[:, 0], :],
@@ -76,11 +76,11 @@ class FaultOutput:
         return 0.5 * np.apply_along_axis(np.linalg.norm, 1, cross0)
 
     def compute_Garea(self, G):
-        """compute rigidity times area of each triangle"""
+        """Compute rigidity times area of each triangle."""
         self.Garea = G * self.compute_face_area()
 
     def compute_barycenter_coords(self):
-        """compute coordinates of fault element barycenter"""
+        """Compute coordinates of fault element barycenter."""
         print("computing barycenters...")
         self.xyzc = (
             self.xyz[self.connect[:, 0], :]
@@ -89,9 +89,8 @@ class FaultOutput:
         ) / 3.0
 
     def compute_face_moment_rate_from_ASl(self):
-        """compute moment rate function of each face element
-        of the fault output by derivating accumulated slip output
-        """
+        """Compute moment rate function of each face element of the fault output by
+        derivating accumulated slip output."""
         print("computing moment rate function from accumulated slip...")
         try:
             self.dt = self.sx.ReadTimeStep()
@@ -115,8 +114,11 @@ class FaultOutput:
         self.FaceMomentRate = self.FaceMomentRate * self.Garea
 
     def compute_face_moment_rate_from_slip_rate(self, fo_SR):
-        """compute moment rate function of each face elemnt of the fault output
-        using directly the slip rate variables. high sampling required!!!"""
+        """Compute moment rate function of each face elemnt of the fault output using
+        directly the slip rate variables.
+
+        high sampling required!!!
+        """
         print("computing moment rate function from SR time histories")
         SRs = fo_SR.sx.ReadData("SRd")
         SRd = fo_SR.sx.ReadData("SRd")
@@ -132,9 +134,8 @@ class FaultOutput:
         self.FaceMomentRate = self.Garea * np.sqrt(SRs**2 + SRd**2)
 
     def compute_face_moment_tensor_NED(self):
-        """compute equivalent moment tensor of each face
-        of the fault output in NED convention (North East Down)
-        """
+        """Compute equivalent moment tensor of each face of the fault output in NED
+        convention (North East Down)"""
         cs = np.cos(self.strike)
         c2s = np.cos(2.0 * self.strike)
         cd = np.cos(self.dip)
@@ -152,7 +153,8 @@ class FaultOutput:
         MomentTensor = np.zeros((6, self.nElements))
         # 0   1  2  3  4  5
         # xx,yy,zz,xy,xz,yz
-        # http://gfzpublic.gfz-potsdam.de/pubman/item/escidoc:65580/component/escidoc:65579/IS_3.8_rev1.pdf (eq 5)
+        # http://gfzpublic.gfz-potsdam.de/pubman/item/escidoc:65580/component/
+        # escidoc:65579/IS_3.8_rev1.pdf (eq 5)
         # with x y z : NED
         MomentTensor[0, :] = -M0 * (sd * cl * s2s + s2d * sl * np.power(ss, 2))
         MomentTensor[1, :] = M0 * (sd * cl * s2s - s2d * sl * np.power(cs, 2))
@@ -163,9 +165,8 @@ class FaultOutput:
         self.FaceMomentTensor = MomentTensor
 
     def compute_equivalent_point_source_subfault(self, ids):
-        """compute properties of the equivalent moment tensor
-        of a subset ids of faces of the fault outputs
-        """
+        """Compute properties of the equivalent moment tensor of a subset ids of faces
+        of the fault outputs."""
         MomentRate = np.sum(self.FaceMomentRate[:, ids], axis=1)
         # Note we do not use np.trapz here because we just want to revert our derivation
         Mom = np.sum(MomentRate) * self.dt

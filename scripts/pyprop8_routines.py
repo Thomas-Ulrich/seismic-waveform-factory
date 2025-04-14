@@ -1,6 +1,4 @@
-import sys
 import numpy as np
-from obspy import UTCDateTime
 from obspy import read, Trace
 from obspy.imaging.beachball import mt2plane, MomentTensor
 import cmt
@@ -8,7 +6,7 @@ from pyproj import Transformer
 import h5py
 from scipy.signal import fftconvolve
 import pyprop8 as pp
-from pyprop8.utils import stf_trapezoidal, make_moment_tensor, rtf2xyz
+from pyprop8.utils import make_moment_tensor, rtf2xyz
 from tqdm import tqdm
 import os
 

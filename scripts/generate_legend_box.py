@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import argparse
 import configparser
 import os
+from itertools import cycle
 
 parser = argparse.ArgumentParser(description=("generate legend box only"))
 parser.add_argument("config_file", help="config file describing event and stations")
@@ -19,6 +20,7 @@ font_size = config.get("GENERAL", "font_size")
 
 legends = config.get("GENERAL", "legends").split(",")
 colors = config.get("GENERAL", "line_colors").split(",")
+source_files = config.get("GENERAL", "source_files").split(",")
 line_widths = [float(v) for v in config.get("GENERAL", "line_widths").split(",")]
 ncolors = len(colors)
 if ncolors < len(legends):

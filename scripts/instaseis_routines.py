@@ -86,8 +86,7 @@ def create_finite_source_from_usgs(db, fname, M0_percentile_threshold=0.02):
 
 
 class ProgressBar(tqdm):
-    """a customized progress bar for tracking the status of
-    synthetics generation"""
+    """A customized progress bar for tracking the status of synthetics generation."""
 
     def __init__(self, total):
         self.total0 = total
@@ -150,7 +149,10 @@ def generate_synthetics_instaseis(
             for iModel, sources in enumerate(list_finite_sources):
                 prefix, _ = os.path.splitext(os.path.basename(source_files[iModel]))
                 c_time = os.path.getctime(source_files[iModel])
-                fname = f"{path_observations}/{prefix}_{c_time}_{station}_{kind_vd}_{t1.format_iris_web_service()}.mseed"
+                fname = (
+                    f"{path_observations}/{prefix}_{c_time}_{station}_{kind_vd}_"
+                    f"{t1.format_iris_web_service()}.mseed"
+                )
                 if os.path.isfile(fname):
                     print(f"reading the data from {fname}")
                     st0 = read(fname)

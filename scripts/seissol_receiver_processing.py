@@ -1,32 +1,24 @@
-import os
 import numpy as np
-from obspy import read, Trace
-from obspy.clients.fdsn.header import FDSNException
-import xml.etree.ElementTree as ET
-import pyproj
-import matplotlib.pyplot as plt
+from obspy import Trace
 import glob
-import pandas as pd
-from pyproj import Transformer
 from obspy import Stream
-
-import glob
-import numpy as np
+from pyproj import Transformer
 
 
 def read_seissol_receiver_file(output_path, idst, coords_only=False):
-    """
-    Read SeisSol receiver seismogram data.
+    """Read SeisSol receiver seismogram data.
 
     Args:
         output_path (str): The path to the output directory, including the prefix.
         idst (int): The receiver ID.
-        coords_only (bool, optional): If True, return only the receiver coordinates. Defaults to False.
+        coords_only (bool, optional): If True, return only the receiver coordinates.
+        Defaults to False.
 
     Returns:
-        tuple or list: If `coords_only` is False, returns a tuple containing the receiver coordinates,
-                       variable list, and seismogram data.
-                       If `coords_only` is True, returns a list containing the receiver coordinates.
+        tuple or list: If `coords_only` is False, returns a tuple containing the
+            receiver coordinates, variable list, and seismogram data.
+            If `coords_only` is True, returns a list containing the receiver
+            coordinates.
     """
     # Construct the file pattern for the receiver data
     file_pattern = f"{output_path}-receiver-{idst:05d}*"
@@ -38,7 +30,8 @@ def read_seissol_receiver_file(output_path, idst, coords_only=False):
 
     if len(files) > 1:
         print(
-            f"Warning: Multiple files match the pattern {file_pattern}. Using the first one: {files[0]}"
+            f"Warning: Multiple files match the pattern {file_pattern}."
+            f" Using the first one: {files[0]}"
         )
 
     with open(files[0], "r") as file:
@@ -64,13 +57,15 @@ def read_seissol_receiver_file(output_path, idst, coords_only=False):
 
 
 def get_station_code_from_coordinates(station_coords, lonlatdepth, eps=5e-3):
-    """
-    Find the station code (e.g., KO.FOCM, HL.TNSA) from the given coordinates.
+    """Find the station code (e.g., KO.FOCM, HL.TNSA) from the given coordinates.
 
     Args:
-        station_coords (dict): A dictionnary of station coordinates indexed by station code
-        lonlatdepth (tuple or list): A tuple or list containing longitude, latitude, and depth values.
-        eps (float, optional): The maximum allowable difference between coordinates (default: 5e-3).
+        station_coords (dict): A dictionnary of station coordinates indexed by station
+           code
+        lonlatdepth (tuple or list): A tuple or list containing longitude, latitude,
+          and depth values.
+        eps (float, optional): The maximum allowable difference between coordinates
+          (default: 5e-3).
 
     Returns:
         str or None: The station code if found, or None if not found.
@@ -81,7 +76,8 @@ def get_station_code_from_coordinates(station_coords, lonlatdepth, eps=5e-3):
         station_lon, station_lat = lonlat
         if abs(station_lon - target_lon) < eps and abs(station_lat - target_lat) < eps:
             print(
-                f"Station code: {station_code}, Longitude: {station_lon}, Latitude: {station_lat}"
+                f"Station code: {station_code}, Longitude: {station_lon},"
+                f" Latitude: {station_lat}"
             )
             return station_code
     return None
@@ -90,8 +86,7 @@ def get_station_code_from_coordinates(station_coords, lonlatdepth, eps=5e-3):
 def stream_from_seissol_data(
     network_code, station_code, variable_list, synth, starttime, kind_vd
 ):
-    """
-    Load SeisSol receiver data into an ObsPy Stream object.
+    """Load SeisSol receiver data into an ObsPy Stream object.
 
     Args:
         network_code (str): The network code.
@@ -139,18 +134,19 @@ def stream_from_seissol_data(
 
 
 def create_zero_stream(network_code, station_code, starttime, delta=1.0, npts=2):
-    """
-    Create an ObsPy Stream object with zero-valued trace data.
+    """Create an ObsPy Stream object with zero-valued trace data.
 
     Args:
         network_code (str): The network code.
         station_code (str): The station code.
         starttime (obspy.UTCDateTime): The start time of the trace.
-        delta (float, optional): The time delta (sample spacing) in seconds. Default is 1.0.
+        delta (float, optional): The time delta (sample spacing) in seconds. Default
+        is 1.0.
         npts (int, optional): The number of data points for each trace. Default is 2.
 
     Returns:
-        obspy.Stream: A Stream object containing three zero-valued traces (E, N, Z components).
+        obspy.Stream: A Stream object containing three zero-valued traces
+         (E, N, Z components).
     """
     st_syn = Stream()
     xyz = "ENZ"
@@ -169,16 +165,18 @@ def create_zero_stream(network_code, station_code, starttime, delta=1.0, npts=2)
 
 
 def compile_inv_lut_gm(folder_prefix, projection, station_coords):
-    """
-    Compile an inverse lookup table for station codes and receiver IDs.
+    """Compile an inverse lookup table for station codes and receiver IDs.
 
     Args:
         folder_prefix (str): The prefix of the folder containing the receiver data.
-        projection (str or pyproj.Proj): The projection to use for coordinate transformations.
-        station_coords (dict): A dictionnary of station coordinates indexed by station code
+        projection (str or pyproj.Proj): The projection to use for coordinate
+        transformations.
+        station_coords (dict): A dictionnary of station coordinates indexed by station
+         code
 
     Returns:
-        dict: A dictionary mapping station codes to receiver IDs for the specified stations.
+        dict: A dictionary mapping station codes to receiver IDs for the specified
+        stations.
     """
     transformer = Transformer.from_crs(projection, "epsg:4326", always_xy=True)
 
@@ -212,13 +210,14 @@ def compile_inv_lut_gm(folder_prefix, projection, station_coords):
 def collect_seissol_synthetics(
     seissol_outputs, station_coords, projection, t1, kind_vd
 ):
-    """
-    Collect synthetic seismograms from SeisSol outputs.
+    """Collect synthetic seismograms from SeisSol outputs.
 
     Args:
         seissol_outputs (list): A list of paths to SeisSol output directories.
-        station_coords (dict): A dictionnary of station coordinates indexed by station code
-        projection (str or pyproj.Proj): The projection to use for coordinate transformations.
+        station_coords (dict): A dictionnary of station coordinates indexed by station
+        code.
+        projection (str or pyproj.Proj): The projection to use for coordinate
+        transformations.
         t1 (obspy.UTCDateTime): The start time of the seismograms.
         kind_vd (string): acceleration, velocity or displacement
 

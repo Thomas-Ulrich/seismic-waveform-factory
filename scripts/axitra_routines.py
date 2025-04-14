@@ -1,6 +1,4 @@
-import sys
 import numpy as np
-from obspy import UTCDateTime
 from obspy import read, Trace
 from obspy.imaging.beachball import mt2plane, MomentTensor
 import cmt

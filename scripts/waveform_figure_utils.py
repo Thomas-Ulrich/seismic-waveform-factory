@@ -2,13 +2,9 @@ import pandas as pd
 from obspy import read
 from obspy.taup import TauPyModel
 from obspy.geodetics.base import gps2dist_azimuth
-from obspy.clients.fdsn import Client, RoutingClient
 import functools as ft
-from lxml.etree import XMLSyntaxError
-import gzip
-import pickle
 import os
-from retrieve_waveforms import get_station_data, initialize_client
+from retrieve_waveforms import get_station_data
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
