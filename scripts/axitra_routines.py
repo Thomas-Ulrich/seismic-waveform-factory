@@ -1,4 +1,3 @@
-import sys
 import numpy as np
 from obspy import UTCDateTime
 from obspy import read, Trace

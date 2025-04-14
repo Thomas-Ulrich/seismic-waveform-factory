@@ -15,8 +15,7 @@ import numpy as np
 
 
 def read_seissol_receiver_file(output_path, idst, coords_only=False):
-    """
-    Read SeisSol receiver seismogram data.
+    """Read SeisSol receiver seismogram data.
 
     Args:
         output_path (str): The path to the output directory, including the prefix.
@@ -64,8 +63,7 @@ def read_seissol_receiver_file(output_path, idst, coords_only=False):
 
 
 def get_station_code_from_coordinates(station_coords, lonlatdepth, eps=5e-3):
-    """
-    Find the station code (e.g., KO.FOCM, HL.TNSA) from the given coordinates.
+    """Find the station code (e.g., KO.FOCM, HL.TNSA) from the given coordinates.
 
     Args:
         station_coords (dict): A dictionnary of station coordinates indexed by station code
@@ -90,8 +88,7 @@ def get_station_code_from_coordinates(station_coords, lonlatdepth, eps=5e-3):
 def stream_from_seissol_data(
     network_code, station_code, variable_list, synth, starttime, kind_vd
 ):
-    """
-    Load SeisSol receiver data into an ObsPy Stream object.
+    """Load SeisSol receiver data into an ObsPy Stream object.
 
     Args:
         network_code (str): The network code.
@@ -139,8 +136,7 @@ def stream_from_seissol_data(
 
 
 def create_zero_stream(network_code, station_code, starttime, delta=1.0, npts=2):
-    """
-    Create an ObsPy Stream object with zero-valued trace data.
+    """Create an ObsPy Stream object with zero-valued trace data.
 
     Args:
         network_code (str): The network code.
@@ -169,8 +165,7 @@ def create_zero_stream(network_code, station_code, starttime, delta=1.0, npts=2)
 
 
 def compile_inv_lut_gm(folder_prefix, projection, station_coords):
-    """
-    Compile an inverse lookup table for station codes and receiver IDs.
+    """Compile an inverse lookup table for station codes and receiver IDs.
 
     Args:
         folder_prefix (str): The prefix of the folder containing the receiver data.
@@ -212,8 +207,7 @@ def compile_inv_lut_gm(folder_prefix, projection, station_coords):
 def collect_seissol_synthetics(
     seissol_outputs, station_coords, projection, t1, kind_vd
 ):
-    """
-    Collect synthetic seismograms from SeisSol outputs.
+    """Collect synthetic seismograms from SeisSol outputs.
 
     Args:
         seissol_outputs (list): A list of paths to SeisSol output directories.

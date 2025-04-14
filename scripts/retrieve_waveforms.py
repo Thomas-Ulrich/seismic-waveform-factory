@@ -62,8 +62,8 @@ def save_station_data(inventory, level, cache_dir):
 
 
 def filter_channels_by_availability(inventory, starttime, endtime):
-    """
-    Filter out channels that don't have data availability in the specified time window.
+    """Filter out channels that don't have data availability in the specified time
+    window.
 
     Parameters:
     -----------
@@ -250,8 +250,7 @@ def get_pre_filt(selected_band):
 
 
 def select_band_with_data(stream, channels, priorities=["B", "H", "E", "M", "L"]):
-    """
-    Select a band based on priority, considering only channels with actual data.
+    """Select a band based on priority, considering only channels with actual data.
 
     :param stream: ObsPy Stream object containing retrieved waveform data.
     :param channels: List of channel codes from the inventory.
@@ -430,8 +429,7 @@ def _retrieve_waveforms(
 
 
 def write_mseed_files(st_obs0, code, selected_band, kind_vd, t1, path_observations):
-    """
-    Write seismic data in MSEED format.
+    """Write seismic data in MSEED format.
 
     Parameters:
     -----------
@@ -455,8 +453,7 @@ def write_mseed_files(st_obs0, code, selected_band, kind_vd, t1, path_observatio
 
 
 def write_sac_files(st_obs0, inventory, path_observations):
-    """
-    Write seismic data in SAC format and corresponding SAC pole-zero files.
+    """Write seismic data in SAC format and corresponding SAC pole-zero files.
 
     Parameters:
     -----------

@@ -86,8 +86,7 @@ def create_finite_source_from_usgs(db, fname, M0_percentile_threshold=0.02):
 
 
 class ProgressBar(tqdm):
-    """a customized progress bar for tracking the status of
-    synthetics generation"""
+    """A customized progress bar for tracking the status of synthetics generation."""
 
     def __init__(self, total):
         self.total0 = total

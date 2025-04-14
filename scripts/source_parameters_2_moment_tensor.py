@@ -12,7 +12,7 @@ def NED2ENU(aMomentTensor):
 
 
 def my_print(x):
-    """print numpy array without []"""
+    """Print numpy array without []"""
     for row in x:
         print(" ".join(map(lambda x: "{:.8e}\t".format(x), row)))
 
@@ -34,9 +34,8 @@ class source:
         self.slip = slip
 
     def compute_moment_tensor_NED(self):
-        """compute equivalent moment tensor of given source parameter
-        in NED convention (North East Down)
-        """
+        """Compute equivalent moment tensor of given source parameter in NED convention
+        (North East Down)"""
         cs = np.cos(self.strike)
         c2s = np.cos(2.0 * self.strike)
         cd = np.cos(self.dip)

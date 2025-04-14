@@ -28,7 +28,7 @@ def plot_outer_boundary(vertex, connect, ax):
 
 
 def setup_map(ax, MapBoundaries, grid_spacing, gridlines_left=True):
-    """Setup the map with cartopy"""
+    """Setup the map with cartopy."""
     ax.set_extent(MapBoundaries, crs=ccrs.PlateCarree())
     scale = "10m"
     ax.add_feature(

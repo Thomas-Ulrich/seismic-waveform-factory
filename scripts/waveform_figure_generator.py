@@ -16,7 +16,9 @@ def remove_top_right_axes(ax):
 
 
 def autoscale_y(ax, margin=0.1):
-    """This function rescales the y-axis based on the data that is visible given the current xlim of the axis.
+    """This function rescales the y-axis based on the data that is visible given the
+    current xlim of the axis.
+
     ax -- a matplotlib axes object
     margin -- the fraction of the total height of the y-data to pad the upper and lower ylims
     """

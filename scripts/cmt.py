@@ -6,7 +6,7 @@ import sys
 
 
 def compute_rigidity(muDescription, muValue, coords):
-    """compute rigidity given model"""
+    """Compute rigidity given model."""
     if muDescription == 0:
         print(f"using constant G: {muValue}")
         return np.ones((coords.shape[0])) * float(muValue)
@@ -33,8 +33,8 @@ def compute_rigidity(muDescription, muValue, coords):
 
 
 def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):
-    """compute a linearly spaces coordinate array
-    (for latter slicing the fault output along vH and z)"""
+    """Compute a linearly spaces coordinate array (for latter slicing the fault output
+    along vH and z)"""
     # Useful if large portion of the fault not ruptured
     if np.amax(fault_slip) / slip_threshold < 20:
         print("Warning, slip_threshold is a significant portion of the maximum slip")
@@ -51,8 +51,8 @@ def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):
 
 
 def compute_slices_array(x1, fault_slip, nslices, slip_threshold):
-    """compute a linearly spaces coordinate array
-    (for latter slicing the fault output along vH and z)"""
+    """Compute a linearly spaces coordinate array (for latter slicing the fault output
+    along vH and z)"""
     # Useful if large portion of the fault not ruptured
     if np.amax(fault_slip) / slip_threshold < 20:
         print("Warning, slip_threshold is a significant portion of the maximum slip")
@@ -91,7 +91,7 @@ def computeMomentTensor(FaceMomentTensor):
 
 
 def compute_seismic_moment(MomentTensor):
-    """compute M0 given the moment tensor (6 components)"""
+    """Compute M0 given the moment tensor (6 components)"""
     fullMomentTensor = np.zeros((3, 3))
     fullMomentTensor[0, :] = [MomentTensor[0], MomentTensor[3], MomentTensor[4]]
     fullMomentTensor[1, :] = [MomentTensor[3], MomentTensor[1], MomentTensor[5]]
@@ -103,7 +103,7 @@ def compute_seismic_moment(MomentTensor):
 
 
 def write_point_source_file(fname, point_sources, dt, proj):
-    """write h5 file describing a multi point source model"""
+    """Write h5 file describing a multi point source model."""
     tags = point_sources.keys()
 
     for i, fault_tag in enumerate(tags):
@@ -149,7 +149,7 @@ def write_point_source_file(fname, point_sources, dt, proj):
 
 
 def getG(asagiFile, xyz):
-    """read 3D Netcdf (Asagi) file and get G at coordinates"""
+    """Read 3D Netcdf (Asagi) file and get G at coordinates."""
     fh = Dataset(asagiFile, mode="r")
 
     if "u" in fh.variables.keys():
