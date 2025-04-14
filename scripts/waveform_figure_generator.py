@@ -20,7 +20,8 @@ def autoscale_y(ax, margin=0.1):
     current xlim of the axis.
 
     ax -- a matplotlib axes object
-    margin -- the fraction of the total height of the y-data to pad the upper and lower ylims
+    margin -- the fraction of the total height of the y-data to pad the upper and
+    lower ylims
     """
 
     def get_bottom_top(line):
@@ -167,7 +168,8 @@ class WaveformFigureGenerator:
                 max_abs_value = max(max_abs_value, max_trace)
         if max_abs_value == float("-inf"):
             print(
-                "No data points found in the specified time range for the specified components."
+                "No data points found in the specified time range for the"
+                " specified components."
             )
             return 0.0
         else:

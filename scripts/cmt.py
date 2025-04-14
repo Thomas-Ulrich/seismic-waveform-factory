@@ -96,7 +96,8 @@ def compute_seismic_moment(MomentTensor):
     fullMomentTensor[0, :] = [MomentTensor[0], MomentTensor[3], MomentTensor[4]]
     fullMomentTensor[1, :] = [MomentTensor[3], MomentTensor[1], MomentTensor[5]]
     fullMomentTensor[2, :] = [MomentTensor[4], MomentTensor[5], MomentTensor[2]]
-    # https://gfzpublic.gfz-potsdam.de/rest/items/item_272892/component/file_541895/content (p6)
+    # https://gfzpublic.gfz-potsdam.de/rest/items/item_272892/
+    # component/file_541895/content (p6)
     # Note that Mom from the moment rate is unprecise
     # Therefore we compute the moment from the final slip here using the Frobenius norm
     return np.linalg.norm(fullMomentTensor) * np.sqrt(0.5)

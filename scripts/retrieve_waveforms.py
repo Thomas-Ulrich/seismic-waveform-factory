@@ -10,6 +10,7 @@ import gzip
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
+from obspy import UTCDateTime
 import glob
 
 
@@ -102,7 +103,8 @@ def filter_channels_by_availability(inventory, starttime, endtime):
             for channel in station:
                 # Check if channel has data availability information
                 if channel.data_availability:
-                    # Check if the requested time window is included in channel availability
+                    # Check if the requested time window is included
+                    # in channel availability
                     chan_start = channel.data_availability.start
                     chan_end = channel.data_availability.end
 
@@ -136,7 +138,7 @@ def filter_channels_by_availability(inventory, starttime, endtime):
     else:
         station_count_ini = sum(len(network.stations) for network in inventory)
         if station_count_ini > 1:
-            print(f"no station removed based on data availability")
+            print("no station removed based on data availability")
 
     return filtered_inventory
 
@@ -161,7 +163,7 @@ def get_station_data(
 
     # Initialize client
     if isinstance(client_or_clientname, str):
-        client = initialize_client(client_or_clientname)
+        client_or_clientname = initialize_client(client_or_clientname)
 
     if network_wise:
         station_param = [",".join(stations_not_cached)]
@@ -195,7 +197,8 @@ def get_station_data(
                     print(f"Error: {e.__class__.__name__}")
                 else:
                     print(
-                        f"Error occurred in get_station for {retry_message}: {e.__class__.__name__}"
+                        f"Error occurred in get_station for {retry_message}:"
+                        f" {e.__class__.__name__}"
                     )
                 continue
     inv = filter_channels_by_availability(inv, t1, t2)
@@ -232,7 +235,8 @@ def get_waveforms(client, network, station, selected_band, t1, t2):
                 print(f"Error: {e.__class__.__name__}")
             else:
                 print(
-                    f"Error occurred in get_waveforms for {station}: {e.__class__.__name__}"
+                    f"Error occurred in get_waveforms for {station}: "
+                    f"{e.__class__.__name__}"
                 )
             continue
 
@@ -278,10 +282,6 @@ def _retrieve_waveforms(
 ):
     level = "response"
     client_initialized = False
-    if client_name in ["eida-routing", "iris-federator"]:
-        is_routing_client = True
-    else:
-        is_routing_client = False
 
     os.makedirs(path_observations, exist_ok=True)
     retrieved_waveforms = {}
@@ -316,10 +316,9 @@ def _retrieve_waveforms(
                     stations.remove(station)
                 else:
                     print(
-                        f"{fullfname} found, but we will redownload the data because the"
-                    )
-                    print(
-                        "sac file is needed (and we need raw data, not instrumented corrected)"
+                        f"{fullfname} found, but we will redownload the data because "
+                        "the sac file is needed (and we need raw data, not instrumented"
+                        "  corrected)"
                     )
 
         if not stations:
@@ -393,8 +392,10 @@ def _retrieve_waveforms(
                 st_obs0.remove_response(
                     output=output_dic[kind_vd],
                     pre_filt=pre_filt,
-                    # todo: use water_level if kind_vd == instrument measured quantity (see warning in)
-                    # https://docs.obspy.org/master/packages/autogen/obspy.core.trace.Trace.remove_response.html
+                    # todo: use water_level if kind_vd == instrument measured quantity
+                    # (see warning in)
+                    # https://docs.obspy.org/master/packages/autogen/
+                    # obspy.core.trace.Trace.remove_response.html
                     water_level=None,
                     zero_mean=True,
                     taper=True,
@@ -403,9 +404,11 @@ def _retrieve_waveforms(
                 )
             # except (ValueError, ObsPyException) as e:
             except ObsPyException as e:
-                # obspy.core.util.obspy_types.ObsPyException: Can not use evalresp on response with no response stages.
+                # obspy.core.util.obspy_types.ObsPyException:
+                # Can not use evalresp on response with no response stages.
                 print(
-                    f"Error in st_obs0.remove_response at station {code}: {e.__class__.__name__}"
+                    f"Error in st_obs0.remove_response at station {code}:"
+                    f" {e.__class__.__name__}"
                 )
                 continue
             try:
@@ -414,9 +417,10 @@ def _retrieve_waveforms(
                 # get rid of this rare error:
                 # raise ValueError("The given directions are not linearly independent, "
                 # ValueError: The given directions are not linearly independent,
-                # at least within numerical precision. Determinant of the base change matrix: 0
+                # at least within numerical precision. Determinant of the base change
+                # matrix: 0
                 print(
-                    f"Error in st_obs0.rotate  at station {code}: {e.__class__.__name__}"
+                    f"Error in st_obs0.rotate at station {code}: {e.__class__.__name__}"
                 )
                 continue
 
@@ -508,7 +512,10 @@ def write_sac_files(st_obs0, inventory, path_observations):
         # Write SAC pole-zero file
         location_padded = tr.stats.location.ljust(2, "_")
 
-        pz_fname = f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_{tr.stats.channel}_{location_padded}"
+        pz_fname = (
+            f"SAC_PZs_{tr.stats.network}_{tr.stats.station}_"
+            f"{tr.stats.channel}_{location_padded}"
+        )
         fullfname_pz = os.path.join(path_observations, pz_fname)
         inv_channel.write(fullfname_pz, format="SACPZ")
         print(f"done writing {fullfname_pz}")
@@ -525,7 +532,6 @@ def retrieve_waveforms_preprocessed(
 ):
     keys_to_check = {"directory", "wf_kind", "wf_factor", "station_files"}
     if keys_to_check.issubset(processed_data.keys()):
-        processed_waveforms = processed_data["directory"]
         pr_wf_kind = processed_data["wf_kind"]
         pr_wf_factor = processed_data["wf_factor"]
         processed_station_files = processed_data["station_files"]

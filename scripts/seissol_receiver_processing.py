@@ -1,17 +1,9 @@
-import os
 import numpy as np
-from obspy import read, Trace
-from obspy.clients.fdsn.header import FDSNException
-import xml.etree.ElementTree as ET
-import pyproj
+from obspy import Trace
 import matplotlib.pyplot as plt
 import glob
-import pandas as pd
-from pyproj import Transformer
 from obspy import Stream
-
-import glob
-import numpy as np
+from pyproj import Transformer
 
 
 def read_seissol_receiver_file(output_path, idst, coords_only=False):

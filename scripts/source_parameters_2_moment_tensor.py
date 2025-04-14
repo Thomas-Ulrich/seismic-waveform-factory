@@ -53,7 +53,8 @@ class source:
         MomentTensor = np.zeros((6))
         # 0   1  2  3  4  5
         # xx,yy,zz,xy,xz,yz
-        # http://gfzpublic.gfz-potsdam.de/pubman/item/escidoc:65580/component/escidoc:65579/IS_3.8_rev1.pdf (eq 5)
+        # http://gfzpublic.gfz-potsdam.de/pubman/item/escidoc:65580/
+        # component/escidoc:65579/IS_3.8_rev1.pdf (eq 5)
         # with x y z : NED
         MomentTensor[0] = -M0 * (sd * cl * s2s + s2d * sl * np.power(ss, 2))
         MomentTensor[1] = M0 * (sd * cl * s2s - s2d * sl * np.power(cs, 2))

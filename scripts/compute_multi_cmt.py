@@ -6,77 +6,94 @@ from faultoutput import FaultOutput
 import os
 
 parser = argparse.ArgumentParser(
-    description="compute multiple point source representation from SeisSol fault output"
+    description=(
+        "Compute multiple point source representation from SeisSol fault output"
+    )
 )
 subparsers = parser.add_subparsers(dest="command")
-
 subparsers.required = True
 
 spatial = subparsers.add_parser(
-    "spatial", help="divide fault along horizontal vector Vh and Uz"
+    "spatial",
+    help="Divide fault along horizontal vector Vh and Uz",
 )
 
 spatial.add_argument(
     "--vH",
     nargs=2,
     metavar=("vhx", "vhy"),
-    help="vector defining the slicing direction in the horizontal plane",
+    help="Vector defining the slicing direction in the horizontal plane",
     type=float,
 )
 
-temporal = subparsers.add_parser("temporal", help="divide fault with time and Uz")
+temporal = subparsers.add_parser(
+    "temporal",
+    help="Divide fault with time and Uz",
+)
 
 temporal.add_argument(
     "--time_range",
     nargs=2,
     metavar=("minT", "maxT"),
-    help="time range for time slices",
+    help="Time range for time slices",
     type=float,
 )
+
 temporal.add_argument(
     "--time_sub_events",
     nargs="+",
-    help="when temporal, define the exact times (relative to minT, see time_range) separating events (NH is then ignored)",
     type=float,
+    help=(
+        "When temporal, define the exact times (relative to minT, see time_range) "
+        "separating events (NH is then ignored)"
+    ),
 )
 
-
 for sp in [spatial, temporal]:
-    sp.add_argument("filename", help="fault output filename (xdmf)")
+    sp.add_argument(
+        "filename",
+        help="Fault output filename (XDMF)",
+    )
+
     sp.add_argument(
         "muDescription",
-        help="0: constant, 1: 1D velocity, 2: 3D netcdf, 3: Sumatra specific",
         type=int,
+        help=("0: constant, 1: 1D velocity, 2: 3D NetCDF, " "3: Sumatra specific"),
     )
 
     sp.add_argument(
         "muValue",
-        help="value of rigidity (mu) of file describing mu \
-(1: 2 columns ASCII (z, mu), 2: 3D netcdf)",
+        help=(
+            "Value of rigidity (mu) or file describing mu. "
+            "1: 2 columns ASCII (z, mu), 2: 3D NetCDF"
+        ),
     )
-    # This can be pertinent if we have a high SR file output
-    # and a coarsely sampled file with the rest of the output (currently it should be an extract)
-    # that is based on the same simulation
+
     sp.add_argument(
         "--STFfromSR",
         nargs=1,
         metavar=("xdmf SR File"),
-        help="use SR to compute Source time function (high sampling rate required)",
+        help=(
+            "Use SR to compute Source Time Function " "(high sampling rate required)"
+        ),
     )
 
     sp.add_argument(
         "--proj",
         nargs=1,
         metavar=("projname"),
-        help="transform to the coordinate reference system WGS 84 (lat, lon) from projname",
+        help=(
+            "Transform to the coordinate reference system WGS 84 (lat, lon) "
+            "from projname"
+        ),
     )
 
     sp.add_argument(
         "--DH",
         nargs=1,
         default=([20]),
-        help="max horizontal distance between point sources, in km",
         type=float,
+        help="Max horizontal distance between point sources, in km",
     )
 
     sp.add_argument(
@@ -84,8 +101,8 @@ for sp in [spatial, temporal]:
         nargs=1,
         metavar=("nz"),
         default=([2]),
-        help="number of point sources along z",
         type=int,
+        help="Number of point sources along z",
     )
 
     sp.add_argument(
@@ -93,8 +110,10 @@ for sp in [spatial, temporal]:
         nargs=1,
         metavar=("slip_threshold"),
         default=([0.1]),
-        help="slip threshold used for excluding low slip areas when slicing the fault",
         type=float,
+        help=(
+            "Slip threshold used for excluding low slip areas when slicing the fault"
+        ),
     )
 
     sp.add_argument(
@@ -102,19 +121,26 @@ for sp in [spatial, temporal]:
         nargs=3,
         metavar=("rvx", "rvy", "rvz"),
         default=([-1e-5, 0, -1]),
-        help="refVector as defined in SeisSol (for computing strike and dip)",
         type=float,
+        help="Reference vector as defined in SeisSol (for computing strike and dip)",
     )
 
     sp.add_argument(
-        "--ndt", nargs=1, metavar=("ndt"), help="use a subset of time frames", type=int
+        "--ndt",
+        nargs=1,
+        metavar=("ndt"),
+        type=int,
+        help="Use a subset of time frames",
     )
 
     sp.add_argument(
         "--invertSld",
         dest="invertSld",
         action="store_true",
-        help="invert Sld (if the normal is (consistently!) wrongly defined in SeisSol output)",
+        help=(
+            "Invert Sld (if the normal is consistently wrongly defined "
+            "in SeisSol output)"
+        ),
     )
 
 args = parser.parse_args()
@@ -164,7 +190,7 @@ for fault_tag in fo.unique_fault_tags:
             sprint = f"user defined time for sub_events: {hslices}"
         else:
             hslices = np.linspace(t0, tmax, (args.DH[0] + 1))
-            sprint = f"{len(hslices)-1} slices along rupture time ({t0}-{tmax}s)"
+            sprint = f"{len(hslices) - 1} slices along rupture time ({t0} - {tmax}s)"
         # hslices[-1] = 1e10
         h_or_RT = fo.get_rupture_time()
     else:
@@ -183,7 +209,7 @@ for fault_tag in fo.unique_fault_tags:
         hslices = cmt.compute_slices_array_enforcing_dx(
             h_or_RT, fo.slip[selected], args.DH[0], args.slip_threshold[0]
         )
-        sprint = f"{len(hslices)-1} slices along horizontal direction :\
+        sprint = f"{len(hslices) - 1} slices along horizontal direction :\
          ({args.vH[0]},{args.vH[1]})"
 
     print(f"{sprint}, {args.NZ[0]} along z")
@@ -237,7 +263,8 @@ for fault_tag in fo.unique_fault_tags:
     nsrc_eq += isrc_segment
     Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07
     print(
-        f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm), {isrc_segment} sources"
+        f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm)"
+        f", {isrc_segment} sources"
     )
 
     aMomentTensor = cmt.NED2RTP(aMomentTensor[0:isrc_segment, :])

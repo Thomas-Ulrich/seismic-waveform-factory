@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client, RoutingClient
-from obspy.geodetics.base import gps2dist_azimuth
-from obspy.geodetics import locations2degrees
 from obspy.core.inventory import Inventory
 from obspy import read_inventory
 import pandas as pd
@@ -13,8 +11,6 @@ import os
 import jinja2
 import geopandas as gpd
 from geopy.distance import geodesic
-from shapely.geometry import Point
-from shapely.ops import nearest_points
 from pyproj import Transformer
 from geodetic_utils import add_distance_backazimuth_to_df
 from retrieve_waveforms import retrieve_waveforms, filter_channels_by_availability
