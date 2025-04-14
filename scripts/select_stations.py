@@ -46,7 +46,8 @@ def compute_dict_network_station(df):
     return network_station
 
 
-# Define a function to calculate the distance between two points using their latitude and longitude
+# Define a function to calculate the distance between
+# two points using their latitude and longitude
 def haversine_distance(lat1, lon1, lat2, lon2):
     coords_1 = (lat1, lon1)
     coords_2 = (lat2, lon2)
@@ -120,9 +121,6 @@ def select_closest_stations(available_stations, selected_stations, nstations):
         selected_stations = available_stations.head(nstations)
         available_stations = available_stations.drop(selected_stations.index)
 
-    nselected = len(selected_stations)
-    remaining_stations = nstations - nselected
-
     return selected_stations.sort_index(), available_stations.sort_index()
 
 
@@ -194,7 +192,8 @@ def select_teleseismic_stations_aiming_for_azimuthal_coverage(
     selected_stations = []
 
     if num_panels >= nstations:
-        # If there are enough panels, select `n` random panels and sample one station per panel
+        # If there are enough panels, select `n` random panels and sample one station
+        # per panel
         # Convert panel_groups.groups.keys() to a list
         panel_keys = list(panel_groups.groups.keys())
 
@@ -224,7 +223,8 @@ def select_teleseismic_stations_aiming_for_azimuthal_coverage(
         selected_stations_df = pd.concat(selected_stations)
         selected_station_ids = selected_stations_df["station"].values.tolist()
 
-        # If there are still remaining stations to reach `nstations`, sample from the remaining stations
+        # If there are still remaining stations to reach `nstations`,
+        # sample from the remaining stations
         remaining_stations_needed = nstations - len(selected_stations_df)
         if remaining_stations_needed > 0:
             remaining_groups = panel_groups.apply(
@@ -322,7 +322,7 @@ def load_or_create_inventory(
             if r1 > 30:
                 kargs["network"] = "IU,II,GE,G"
                 print(
-                    f"Warning: restricting to networks {kargs['network']} for teleseismic"
+                    f"Warning: using only networks {kargs['network']} for teleseismic"
                 )
 
         if client_name in ["NCEDC"]:
@@ -431,10 +431,14 @@ if __name__ == "__main__":
         try:
             import instaseis
 
-            signal_length = db.info.length
             db_name = config.get("GENERAL", "db")
             db = instaseis.open_db(db_name)
-        except:
+            signal_length = db.info.length
+        except (ImportError, ModuleNotFoundError) as e:
+            print(f"instaseis not available: {e}")
+            signal_length = 3600.0
+        except (OSError, IOError, ValueError) as e:
+            print(f"Could not open Instaseis DB: {e}")
             signal_length = 3600.0
 
         t_before = 1000
