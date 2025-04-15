@@ -9,7 +9,7 @@ import argparse
 import configparser
 import os
 from fault_processing import compute_shapely_polygon
-from waveform_figure_utils import initialize_client
+from retrieve_waveforms import initialize_client
 from obspy import read_inventory
 from obspy.core.inventory import Inventory
 from geodetic_utils import add_distance_backazimuth_to_df
