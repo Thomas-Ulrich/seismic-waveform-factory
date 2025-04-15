@@ -266,7 +266,10 @@ if seissol_outputs:
 
 
 if "axitra" in software and source_files:
-    sys.path.append(path2axitra)
+    for my_path in path2axitra.split(","):
+        if os.path.isfile(os.path.join(my_path, "axitra")):
+            sys.path.append(my_path.strip())
+            break
     from axitra_routines import generate_synthetics_axitra
 
     list_synthetics = generate_synthetics_axitra(
@@ -277,7 +280,7 @@ if "axitra" in software and source_files:
         fmax,
         duration,
         velocity_model_fname,
-        path2axitra,
+        my_path,
     )
     list_synthetics_all += list_synthetics
     t_obs_before, t_obs_after = 100, 400

@@ -154,6 +154,6 @@ for station, info in stations.items():
 
     # Plot waveform near station
     ax.plot(x + time * 0.005, y + waveform * 0.2, "k", lw=1)
-
+plt.savefig("map.png")
 # Show the plot
-plt.show()
+# plt.show()
