@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.offsetbox import AnchoredText
 from obspy.signal.tf_misfit import pg, eg
+import matplotlib.lines as mlines
 import os
 
 
@@ -70,6 +71,7 @@ class WaveformFigureGenerator:
         normalize,
         relative_offset,
         annotations,
+        global_legend_labels,
     ):
         self.components = components
         self.signal_kind = signal_kind
@@ -96,6 +98,7 @@ class WaveformFigureGenerator:
         self.line_widths = line_widths
         self.relative_offset = relative_offset
         self.annotations = annotations
+        self.global_legend_labels = global_legend_labels
 
     def init_gof_pandas_df(self):
         columns = ["station", "distance", "azimuth"]
@@ -146,6 +149,33 @@ class WaveformFigureGenerator:
                     axi.set_xticks([])
                     axi.set_yticks([])
         self.fig, self.axarr = fig, axarr
+
+    def add_global_legend(self):
+        # Add an invisible axis for the legend above the figure
+        self.fig.subplots_adjust(top=0.88)  # Make some room at the top
+        self.legend_ax = self.fig.add_axes([0.1, 0.9, 0.8, 0.05], frameon=False)
+        self.legend_ax.axis("off")
+        # Define one Line2D for each synthetic model and observation
+        handles = []
+        nlabels = len(self.global_legend_labels)
+        ncol = self.ncol_per_component * self.ncomp
+        for idx in range(nlabels):
+            if idx > len(self.line_widths) - 1:
+                color = "k"
+                line_width = self.line_widths[-1]
+            else:
+                color = color = self.colors[idx]
+                line_width = self.line_widths[idx]
+            line = mlines.Line2D([], [], color=color, linewidth=line_width)
+            handles.append(line)
+
+        self.legend_ax.legend(
+            handles,
+            self.global_legend_labels,
+            loc="center",
+            ncol=ncol,
+            frameon=False,
+        )
 
     def compute_max_abs_value_trace(self, trace, reftime):
         max_abs_value = float("-inf")
@@ -411,6 +441,8 @@ class WaveformFigureGenerator:
         return gof, otrace.data[0] * self.scaling
 
     def finalize_and_save_fig(self, fname):
+        if self.global_legend_labels:
+            self.add_global_legend()
         if self.signal_kind == "surface_waves":
             direction = {"E": "EW", "N": "NS", "Z": "UD"}
             for j, comp in enumerate(self.components):
