@@ -79,6 +79,10 @@ client_name = config.get("GENERAL", "client")
 onset = config.get("GENERAL", "onset")
 t1 = UTCDateTime(onset)
 kind_vd = config.get("GENERAL", "kind")
+global_legend_labels = config.get("GENERAL", "global_legend_labels", fallback=None)
+if global_legend_labels:
+    global_legend_labels = [item.strip() for item in global_legend_labels.split(";")]
+
 
 software = config.get("GENERAL", "software").split(",")
 # prevent result ['']
@@ -210,6 +214,7 @@ Pwave = WaveformFigureGenerator(
     normalize,
     relative_offset,
     annotations,
+    global_legend_labels,
 )
 SHwave = WaveformFigureGenerator(
     "SH",
@@ -229,6 +234,7 @@ SHwave = WaveformFigureGenerator(
     normalize,
     relative_offset,
     annotations,
+    global_legend_labels,
 )
 surface_waves = WaveformFigureGenerator(
     "surface_waves",
@@ -248,6 +254,7 @@ surface_waves = WaveformFigureGenerator(
     normalize,
     relative_offset,
     annotations,
+    global_legend_labels,
 )
 
 components = ["E", "N", "Z"]
