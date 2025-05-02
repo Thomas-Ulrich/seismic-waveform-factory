@@ -50,7 +50,7 @@ annotations = config.get(
 ).split(",")
 
 projection = config.get("GENERAL", "projection", fallback=None)
-distance_unit = config.get("GENERAL", "distance_unit", fallback="degree")
+distance_unit = config.get("GENERAL", "distance_unit", fallback=None)
 
 source_files = config.get("GENERAL", "source_files").split(",")
 source_files = [val.strip() for val in source_files]
@@ -102,6 +102,12 @@ if ("axitra" in software) or ("pyprop8" in software):
 
 if seissol_outputs:
     prefix = f"{prefix}_{kind_vd}_seissol"
+
+if not distance_unit:
+    if ("axitra" in software) or ("pyprop8" in software) or seissol_outputs:
+        distance_unit = "km"
+    else:
+        distance_unit = "degree"
 
 
 hypo_lon = config.getfloat("GENERAL", "hypo_lon")
