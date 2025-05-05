@@ -76,13 +76,13 @@ class FaultOutput:
         self.face_area = 0.5 * np.apply_along_axis(np.linalg.norm, 1, cross0)
 
     def evaluate_G(self, mu_description):
-        if mu_description.endswith("*.txt"):
+        if mu_description.endswith(".txt"):
             print(f"loading 1D velocity file {mu_description}")
             depthmu = np.loadtxt(mu_description)
             depthmu = depthmu[depthmu[:, 0].argsort()]
             self.G = np.interp(self.xyzc[:, 2], depthmu[:, 0], depthmu[:, 1])
 
-        elif mu_description.endswith("*.yaml") or mu_description.endswith("*.yml"):
+        elif mu_description.endswith(".yaml") or mu_description.endswith(".yml"):
             import easi
 
             regions = np.ones((self.nElements, 1))
