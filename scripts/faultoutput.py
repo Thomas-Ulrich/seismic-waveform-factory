@@ -73,7 +73,26 @@ class FaultOutput:
             self.xyz[self.connect[:, 1], :] - self.xyz[self.connect[:, 0], :],
             self.xyz[self.connect[:, 2], :] - self.xyz[self.connect[:, 0], :],
         )
-        return 0.5 * np.apply_along_axis(np.linalg.norm, 1, cross0)
+        self.face_area = 0.5 * np.apply_along_axis(np.linalg.norm, 1, cross0)
+
+    def evaluate_G(self, mu_description):
+        if mu_description.endswith("*.txt"):
+            print(f"loading 1D velocity file {mu_description}")
+            depthmu = np.loadtxt(mu_description)
+            depthmu = depthmu[depthmu[:, 0].argsort()]
+            self.G = np.interp(self.xyzc[:, 2], depthmu[:, 0], depthmu[:, 1])
+
+        elif mu_description.endswith("*.yaml") or mu_description.endswith("*.yml"):
+            import easi
+
+            regions = np.ones((self.nElements, 1))
+            print(
+                "Warning: assuming region 1 for all cells when evaluating mu with easi"
+            )
+            out = easi.evaluate_model(self.xyzc, regions, ["mu"], mu_description)
+            self.G = out["mu"]
+        else:
+            self.G = float(mu_description)
 
     def compute_Garea(self, G):
         """Compute rigidity times area of each triangle."""
@@ -97,11 +116,11 @@ class FaultOutput:
         except NameError:
             # there is only one sample in fault output (extract of the last time step)
             self.dt = 1.0
-        self.FaceMomentRate = np.zeros((self.ndt, self.nElements))
+        self.face_momen_rate = np.zeros((self.ndt, self.nElements))
         # if too many elements this may generate a memory overflow, therefore the if
         if self.ndt * self.nElements < 10e6:
             ASl = self.sx.ReadData("ASl")
-            self.FaceMomentRate[1:, :] = np.diff(ASl, axis=0) / self.dt
+            self.face_momen_rate[1:, :] = np.diff(ASl, axis=0) / self.dt
         else:
             print("using a slower but more memory efficient implementation")
             slip1 = self.sx.ReadData("ASl", 0)
@@ -109,9 +128,9 @@ class FaultOutput:
                 print(i, end=" ")
                 slip0 = np.copy(slip1)
                 slip1 = self.sx.ReadData("ASl", i)
-                self.FaceMomentRate[i, :] = (slip1 - slip0) / self.dt
+                self.face_momen_rate[i, :] = (slip1 - slip0) / self.dt
             print()
-        self.FaceMomentRate = self.FaceMomentRate * self.Garea
+        self.face_momen_rate = self.face_momen_rate * self.Garea
 
     def compute_face_moment_rate_from_slip_rate(self, fo_SR):
         """Compute moment rate function of each face elemnt of the fault output using
@@ -131,7 +150,7 @@ class FaultOutput:
             )
         self.dt = fo_SR.sx.ReadTimeStep()
         self.ndt = fo_SR.sx.ndt
-        self.FaceMomentRate = self.Garea * np.sqrt(SRs**2 + SRd**2)
+        self.face_momen_rate = self.Garea * np.sqrt(SRs**2 + SRd**2)
 
     def compute_face_moment_tensor_NED(self):
         """Compute equivalent moment tensor of each face of the fault output in NED
@@ -150,40 +169,40 @@ class FaultOutput:
 
         M0 = self.Garea * self.slip
 
-        MomentTensor = np.zeros((6, self.nElements))
+        moment_tensor = np.zeros((6, self.nElements))
         # 0   1  2  3  4  5
         # xx,yy,zz,xy,xz,yz
         # http://gfzpublic.gfz-potsdam.de/pubman/item/escidoc:65580/component/
         # escidoc:65579/IS_3.8_rev1.pdf (eq 5)
         # with x y z : NED
-        MomentTensor[0, :] = -M0 * (sd * cl * s2s + s2d * sl * np.power(ss, 2))
-        MomentTensor[1, :] = M0 * (sd * cl * s2s - s2d * sl * np.power(cs, 2))
-        MomentTensor[2, :] = M0 * (s2d * sl)
-        MomentTensor[3, :] = M0 * (sd * cl * c2s + 0.5 * s2d * sl * s2s)
-        MomentTensor[4, :] = -M0 * (cd * cl * cs + c2d * sl * ss)
-        MomentTensor[5, :] = -M0 * (cd * cl * ss - c2d * sl * cs)
-        self.FaceMomentTensor = MomentTensor
+        moment_tensor[0, :] = -M0 * (sd * cl * s2s + s2d * sl * np.power(ss, 2))
+        moment_tensor[1, :] = M0 * (sd * cl * s2s - s2d * sl * np.power(cs, 2))
+        moment_tensor[2, :] = M0 * (s2d * sl)
+        moment_tensor[3, :] = M0 * (sd * cl * c2s + 0.5 * s2d * sl * s2s)
+        moment_tensor[4, :] = -M0 * (cd * cl * cs + c2d * sl * ss)
+        moment_tensor[5, :] = -M0 * (cd * cl * ss - c2d * sl * cs)
+        self.face_moment_tensor = moment_tensor
 
     def compute_equivalent_point_source_subfault(self, ids):
         """Compute properties of the equivalent moment tensor of a subset ids of faces
         of the fault outputs."""
-        MomentRate = np.sum(self.FaceMomentRate[:, ids], axis=1)
+        moment_rate = np.sum(self.face_momen_rate[:, ids], axis=1)
         # Note we do not use np.trapz here because we just want to revert our derivation
-        Mom = np.sum(MomentRate) * self.dt
-        if abs(Mom) < 1e-3:
+        mom = np.sum(moment_rate) * self.dt
+        if abs(mom) < 1e-3:
             return None, None, None, None
-        NormMomentRate = MomentRate / Mom
+        norm_moment_rate = moment_rate / mom
 
-        MomentTensor = cmt.computeMomentTensor(self.FaceMomentTensor[:, ids])
-        M0all = cmt.compute_seismic_moment(MomentTensor)
+        moment_tensor = cmt.compute_moment_tensor(self.face_moment_tensor[:, ids])
+        m0all = cmt.compute_seismic_moment(moment_tensor)
 
         # Correct the moment tensor to the get actual seismic moment
-        # In fact, M0all can be smaller than Mom:
+        # In fact, m0all can be smaller than mom:
         # For instance if 2 faces of similar orientation have opposite fault slip vector
-        # Mom will be 2*M0 and M0all will be zero
-        if M0all > 0:
-            aMomentTensor = (Mom / M0all) * MomentTensor
+        # mom will be 2*M0 and m0all will be zero
+        if m0all > 0:
+            corrected_moment_tensor = (mom / m0all) * moment_tensor
 
-        FaceMoment = np.sum(self.FaceMomentRate[:, ids], axis=0) * self.dt
-        xyzc = np.average(self.xyzc[ids, :], axis=0, weights=FaceMoment)
-        return Mom, NormMomentRate, aMomentTensor, xyzc
+        face_moment = np.sum(self.face_momen_rate[:, ids], axis=0) * self.dt
+        xyzc = np.average(self.xyzc[ids, :], axis=0, weights=face_moment)
+        return mom, norm_moment_rate, corrected_moment_tensor, xyzc

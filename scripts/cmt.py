@@ -1,35 +1,6 @@
 import numpy as np
-from netCDF4 import Dataset
-from scipy.interpolate import RegularGridInterpolator
 import h5py
 import sys
-
-
-def compute_rigidity(muDescription, muValue, coords):
-    """Compute rigidity given model."""
-    if muDescription == 0:
-        print(f"using constant G: {muValue}")
-        return np.ones((coords.shape[0])) * float(muValue)
-
-    elif muDescription == 1:
-        print(f"loading 1D velocity file {muValue}")
-        depthmu = np.loadtxt(muValue)
-        depthmu = depthmu[depthmu[:, 0].argsort()]
-        return np.interp(coords[:, 2], depthmu[:, 0], depthmu[:, 1])
-
-    elif muDescription == 2:
-        print(f"loading G from 3D netcdf file: {muValue}")
-        return getG(muValue, coords)
-
-    elif muDescription == 3:
-        print(f"loading 1D velocity file (Sumatra model): {muValue}")
-        depthmu = np.loadtxt(muValue)
-        depthmu = depthmu[depthmu[:, 0].argsort()]
-        y1, y2 = 250000, 1550000
-        alpha = np.maximum(0.0, np.minimum(1.0, (coords[:, 1] - y1) / (y2 - y1)))
-        depth_seafloor = -5000.0 + 2000.0 * alpha
-        print(depth_seafloor)
-        return np.interp(coords[:, 2] - depth_seafloor, depthmu[:, 0], depthmu[:, 1])
 
 
 def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):
@@ -86,7 +57,7 @@ def RTP2NED(aMomentTensor):
     return np.array([sign * aMomentTensor[ind] for sign, ind in zip(signs, indices)]).T
 
 
-def computeMomentTensor(FaceMomentTensor):
+def compute_moment_tensor(FaceMomentTensor):
     return np.sum(FaceMomentTensor, axis=1)
 
 
@@ -147,29 +118,3 @@ def write_point_source_file(fname, point_sources, dt, proj):
         else:
             h5f.attrs["CoordinatesConvention"] = np.bytes_("projected")
     print(f"done writing {fname}")
-
-
-def getG(asagiFile, xyz):
-    """Read 3D Netcdf (Asagi) file and get G at coordinates."""
-    fh = Dataset(asagiFile, mode="r")
-
-    if "u" in fh.variables.keys():
-        lvar = ["u", "v", "w"]
-    elif "x" in fh.variables.keys():
-        lvar = ["x", "y", "z"]
-    else:
-        raise ValueError("wrong variables in netcdf")
-
-    x = fh.variables[lvar[0]][:]
-    y = fh.variables[lvar[1]][:]
-    z = fh.variables[lvar[2]][:]
-    data = fh.variables["data"]
-    data = np.swapaxes(data, 0, 2)
-    data = [test[1] for test in data.flatten()]
-    data = np.array(data)
-    data = data.reshape((x.shape[0], y.shape[0], z.shape[0]))
-    if z[1] < z[0]:
-        data = np.flip(data, axis=2)
-        z = np.flip(z)
-    fn = RegularGridInterpolator((x, y, z), data)
-    return fn(xyz)

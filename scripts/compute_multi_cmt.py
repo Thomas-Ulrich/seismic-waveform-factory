@@ -56,16 +56,10 @@ for sp in [spatial, temporal]:
     )
 
     sp.add_argument(
-        "muDescription",
-        type=int,
-        help=("0: constant, 1: 1D velocity, 2: 3D NetCDF, " "3: Sumatra specific"),
-    )
-
-    sp.add_argument(
-        "muValue",
+        "mu",
         help=(
-            "Value of rigidity (mu) or file describing mu. "
-            "1: 2 columns ASCII (z, mu), 2: 3D NetCDF"
+            "a float value, a 2 columns ASCII (z, mu) text file "
+            "or a yaml file to be read with easi"
         ),
     )
 
@@ -156,7 +150,9 @@ fo.read_final_slip()
 fo.compute_strike_dip(args.refVector)
 fo.compute_rake(args.invertSld)
 fo.compute_barycenter_coords()
-fo.compute_Garea(cmt.compute_rigidity(args.muDescription, args.muValue, fo.xyzc))
+fo.compute_face_area()
+fo.evaluate_G(args.mu)
+fo.Garea = fo.G * fo.face_area
 
 if args.STFfromSR:
     fo_SR = FaultOutput(args.STFfromSR[0])
