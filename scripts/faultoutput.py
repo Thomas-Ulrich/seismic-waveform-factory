@@ -85,7 +85,7 @@ class FaultOutput:
         elif mu_description.endswith(".yaml") or mu_description.endswith(".yml"):
             import easi
 
-            regions = np.ones((self.nElements, 1))
+            regions = np.ones((self.nElements,))
             print(
                 "Warning: assuming region 1 for all cells when evaluating mu with easi"
             )
