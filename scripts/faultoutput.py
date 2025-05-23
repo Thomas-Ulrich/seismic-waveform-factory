@@ -116,11 +116,11 @@ class FaultOutput:
         except NameError:
             # there is only one sample in fault output (extract of the last time step)
             self.dt = 1.0
-        self.face_momen_rate = np.zeros((self.ndt, self.nElements))
+        self.face_moment_rate = np.zeros((self.ndt, self.nElements))
         # if too many elements this may generate a memory overflow, therefore the if
         if self.ndt * self.nElements < 10e6:
             ASl = self.sx.ReadData("ASl")
-            self.face_momen_rate[1:, :] = np.diff(ASl, axis=0) / self.dt
+            self.face_moment_rate[1:, :] = np.diff(ASl, axis=0) / self.dt
         else:
             print("using a slower but more memory efficient implementation")
             slip1 = self.sx.ReadData("ASl", 0)
@@ -128,9 +128,9 @@ class FaultOutput:
                 print(i, end=" ")
                 slip0 = np.copy(slip1)
                 slip1 = self.sx.ReadData("ASl", i)
-                self.face_momen_rate[i, :] = (slip1 - slip0) / self.dt
+                self.face_moment_rate[i, :] = (slip1 - slip0) / self.dt
             print()
-        self.face_momen_rate = self.face_momen_rate * self.Garea
+        self.face_moment_rate = self.face_moment_rate * self.Garea
 
     def compute_face_moment_rate_from_slip_rate(self, fo_SR):
         """Compute moment rate function of each face elemnt of the fault output using
@@ -150,7 +150,7 @@ class FaultOutput:
             )
         self.dt = fo_SR.sx.ReadTimeStep()
         self.ndt = fo_SR.sx.ndt
-        self.face_momen_rate = self.Garea * np.sqrt(SRs**2 + SRd**2)
+        self.face_moment_rate = self.Garea * np.sqrt(SRs**2 + SRd**2)
 
     def compute_face_moment_tensor_NED(self):
         """Compute equivalent moment tensor of each face of the fault output in NED
@@ -186,7 +186,7 @@ class FaultOutput:
     def compute_equivalent_point_source_subfault(self, ids):
         """Compute properties of the equivalent moment tensor of a subset ids of faces
         of the fault outputs."""
-        moment_rate = np.sum(self.face_momen_rate[:, ids], axis=1)
+        moment_rate = np.sum(self.face_moment_rate[:, ids], axis=1)
         # Note we do not use np.trapz here because we just want to revert our derivation
         mom = np.sum(moment_rate) * self.dt
         if abs(mom) < 1e-3:
@@ -203,6 +203,6 @@ class FaultOutput:
         if m0all > 0:
             corrected_moment_tensor = (mom / m0all) * moment_tensor
 
-        face_moment = np.sum(self.face_momen_rate[:, ids], axis=0) * self.dt
+        face_moment = np.sum(self.face_moment_rate[:, ids], axis=0) * self.dt
         xyzc = np.average(self.xyzc[ids, :], axis=0, weights=face_moment)
         return mom, norm_moment_rate, corrected_moment_tensor, xyzc
