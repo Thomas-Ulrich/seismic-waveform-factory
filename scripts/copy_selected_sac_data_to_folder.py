@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     station_codes = config.get("GENERAL", "stations").split(",")
     path_observations = config.get("GENERAL", "path_observations")
-    dest_folder = args.output_folder[0]
+    dest_folder = args.output_folder
     os.makedirs(dest_folder, exist_ok=True)
     all_files = []
     for code in station_codes:
