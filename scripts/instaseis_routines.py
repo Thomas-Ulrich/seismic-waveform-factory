@@ -18,11 +18,11 @@ def geographic2geocentric(lat):
 def create_finite_source_from_h5(db, filename, t1, myproj):
     # read HDF5 and create Finite Source for instaseis
     with h5py.File(filename) as h5f:
-        NormalizedMomentRate = h5f["NormalizedMomentRate"][:, :]
-        nsource, ndt = NormalizedMomentRate.shape
+        normalized_moment_rates = h5f["normalized_moment_rates"][:, :]
+        nsource, ndt = normalized_moment_rates.shape
         xyz = h5f["xyz"][:, :]
-        MomentTensor = h5f["MomentTensor"][:, :]
-        dt = h5f["dt"][0]
+        moment_tensors = h5f["moment_tensors"][:, :]
+        dt = h5f["dt"]
         print(f"sources coordinates in {filename}", xyz)
         if myproj:
             print("projecting back to geocentric")
@@ -39,12 +39,12 @@ def create_finite_source_from_h5(db, filename, t1, myproj):
             # xyz[:,2] = txyz[2]
             print(xyz)
         else:
-            if h5f.attrs["CoordinatesConvention"] == b"geographic":
+            if h5f.attrs["coordinates_convention"] == b"geographic":
                 xyz[:, 1] = geographic2geocentric(xyz[:, 1])
-            elif h5f.attrs["CoordinatesConvention"] == b"geocentric":
+            elif h5f.attrs["coordinates_convention"] == b"geocentric":
                 print("coordinates already in geocentric")
             else:
-                print("coordinates are projected", h5f.attrs["CoordinatesConvention"])
+                print("coordinates are projected", h5f.attrs["coordinates_convention"])
                 exit()
     lps = []
     for isrc in range(nsource):
@@ -52,14 +52,14 @@ def create_finite_source_from_h5(db, filename, t1, myproj):
             latitude=xyz[isrc, 1],
             longitude=xyz[isrc, 0],
             depth_in_m=-xyz[isrc, 2],
-            m_rr=MomentTensor[isrc, 0],
-            m_tt=MomentTensor[isrc, 1],
-            m_pp=MomentTensor[isrc, 2],
-            m_rt=MomentTensor[isrc, 3],
-            m_rp=MomentTensor[isrc, 4],
-            m_tp=MomentTensor[isrc, 5],
+            m_rr=moment_tensors[isrc, 0],
+            m_tt=moment_tensors[isrc, 1],
+            m_pp=moment_tensors[isrc, 2],
+            m_rt=moment_tensors[isrc, 3],
+            m_rp=moment_tensors[isrc, 4],
+            m_tp=moment_tensors[isrc, 5],
             origin_time=t1,
-            sliprate=NormalizedMomentRate[isrc, :],
+            sliprate=normalized_moment_rates[isrc, :],
             dt=dt,
         )
         source.resample_sliprate(db.info.dt, int(ndt * dt / db.info.dt))

@@ -32,12 +32,12 @@ def create_pyprop8_receivers(station_coords, transformer):
 
 def create_pyprop8_source_list_from_h5(filename):
     with h5py.File(filename) as h5f:
-        normalizedMomentRate = h5f["NormalizedMomentRate"][:, :]
-        nsource, ndt = normalizedMomentRate.shape
+        normalized_moment_rates = h5f["normalized_moment_rates"][:, :]
+        nsource, ndt = normalized_moment_rates.shape
         xyz = h5f["xyz"][:, :]
-        aMomentTensor = h5f["MomentTensor"][:, :]
-        dt = h5f["dt"][0]
-        assert h5f.attrs["CoordinatesConvention"] == b"geographic"
+        moment_tensors = h5f["moment_tensors"][:, :]
+        dt = h5f["dt"]
+        assert h5f.attrs["coordinates_convention"] == b"geographic"
 
     latlon = True
     if not latlon:
@@ -54,19 +54,19 @@ def create_pyprop8_source_list_from_h5(filename):
     F = np.zeros((3, 1))
     sources = []
     for isrc in range(nsource):
-        M[0, 0] = aMomentTensor[isrc, 2]
-        M[1, 1] = aMomentTensor[isrc, 1]
-        M[2, 2] = aMomentTensor[isrc, 0]
-        M[0, 1] = M[1, 0] = -aMomentTensor[isrc, 5]
-        M[0, 2] = M[2, 0] = aMomentTensor[isrc, 4]
-        M[1, 2] = M[2, 1] = -aMomentTensor[isrc, 3]
+        M[0, 0] = moment_tensors[isrc, 2]
+        M[1, 1] = moment_tensors[isrc, 1]
+        M[2, 2] = moment_tensors[isrc, 0]
+        M[0, 1] = M[1, 0] = -moment_tensors[isrc, 5]
+        M[0, 2] = M[2, 0] = moment_tensors[isrc, 4]
+        M[1, 2] = M[2, 1] = -moment_tensors[isrc, 3]
         M[:, :] *= 1e-15
 
         use_strike_dip_rake = False
         if use_strike_dip_rake:
-            M0all = cmt.compute_seismic_moment(aMomentTensor[isrc, :])
+            M0all = cmt.compute_seismic_moment(moment_tensors[isrc, :])
             # Mw = 2.0 /    3.0 * np.log10(M0all) - 6.07
-            nopl = mt2plane(MomentTensor(aMomentTensor[isrc, :], 0))
+            nopl = mt2plane(MomentTensor(moment_tensors[isrc, :], 0))
             M[:, :] = rtf2xyz(
                 make_moment_tensor(
                     nopl.strike, nopl.dip, nopl.rake, M0all * 1e-15, 0, 0
@@ -84,7 +84,7 @@ def create_pyprop8_source_list_from_h5(filename):
             )
         ]
 
-    return transformer, sources, dt, normalizedMomentRate
+    return transformer, sources, dt, normalized_moment_rates
 
 
 def generate_synthetics(

@@ -19,25 +19,25 @@ def create_axitra_station_file(station_coords):
 
 def create_axitra_source_from_h5(filename):
     with h5py.File(filename) as h5f:
-        normalizedMomentRate = h5f["NormalizedMomentRate"][:, :]
+        normalizedMomentRate = h5f["normalized_moment_rates"][:, :]
         nsource, ndt = normalizedMomentRate.shape
         xyz = h5f["xyz"][:, :]
-        aMomentTensor = h5f["MomentTensor"][:, :]
-        dt = h5f["dt"][0]
+        moment_tensors = h5f["moment_tensors"][:, :]
+        dt = h5f["dt"]
         sources = np.zeros((nsource, 4))
         sources[:, 0] = np.arange(nsource) + 1
         sources[:, 1] = xyz[:, 1]
         sources[:, 2] = xyz[:, 0]
         sources[:, 3] = -xyz[:, 2]
 
-        assert h5f.attrs["CoordinatesConvention"] == b"geographic"
+        assert h5f.attrs["coordinates_convention"] == b"geographic"
 
     hist = np.zeros((nsource, 8))
     delay = 0
     for isrc in range(nsource):
-        M0all = cmt.compute_seismic_moment(aMomentTensor[isrc, :])
+        M0all = cmt.compute_seismic_moment(moment_tensors[isrc, :])
         # Mw = 2.0 / 3.0 * np.log10(M0all) - 6.07
-        nopl = mt2plane(MomentTensor(aMomentTensor[isrc, :], 0))
+        nopl = mt2plane(MomentTensor(moment_tensors[isrc, :], 0))
         hist[isrc, :] = [
             isrc + 1,
             M0all,

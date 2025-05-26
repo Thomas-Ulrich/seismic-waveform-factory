@@ -110,8 +110,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 h5f = h5py.File(args.filename, "r")
-aMomentTensor = h5f["MomentTensor"][:, :]
-nsrc = aMomentTensor.shape[0]
+moment_tensors = h5f["moment_tensors"][:, :]
+nsrc = moment_tensors.shape[0]
 xyz = h5f["xyz"][:, :]
 h5f.close()
 xyz[:, 0] += args.x0y0proj[0]
@@ -164,18 +164,18 @@ if args.fault_edge:
 cmap = matplotlib.colormaps["twilight"]
 
 for isrc in range(nsrc):
-    M0all = cmt.compute_seismic_moment(aMomentTensor[isrc, :])
+    M0all = cmt.compute_seismic_moment(moment_tensors[isrc, :])
     Mw = 2.0 / 3.0 * np.log10(M0all) - 6.07
     print(f"{isrc:5d}: {Mw:.2f}", end=" ")
     if isrc % 10 == 9:
         print()
-    MomentTensor = cmt.RTP2NED(aMomentTensor[isrc, :] / M0all)
+    moment_tensor = cmt.RTP2NED(moment_tensors[isrc, :] / M0all)
 
     color = cmap(isrc / nsrc)
     if args.unicolor:
         color = "b"
     beach1 = beach(
-        MomentTensor[:],
+        moment_tensor[:],
         xy=xyz[isrc, 0:2],
         width=Mw * args.beachSize[0] * 0.01,
         linewidth=0.2,

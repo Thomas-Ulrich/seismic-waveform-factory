@@ -83,10 +83,10 @@ def write_point_source_file(fname, point_sources, dt, proj, is_potency):
     # Extract all data using list comprehensions
     fault_data_list = list(point_sources.values())
 
-    moment_tensor = np.concatenate(
+    moment_tensors = np.concatenate(
         [data["moment_tensors"] for data in fault_data_list], axis=0
     )
-    normalized_moment_rate = np.concatenate(
+    normalized_moment_rates = np.concatenate(
         [data["moment_rate_functions"] for data in fault_data_list], axis=0
     )
     xyz = np.concatenate([data["locations"] for data in fault_data_list], axis=0)
@@ -103,9 +103,9 @@ def write_point_source_file(fname, point_sources, dt, proj, is_potency):
     )
 
     with h5py.File(fname, "w") as h5f:
-        h5f.create_dataset("normalized_moment_rate", data=normalized_moment_rate, dtype="d")
+        h5f.create_dataset("normalized_moment_rates", data=normalized_moment_rates, dtype="d")
         h5f.create_dataset("xyz", data=xyz, dtype="d")
-        h5f.create_dataset("moment_tensor", data=moment_tensor, dtype="d")
+        h5f.create_dataset("moment_tensors", data=moment_tensors, dtype="d")
         h5f.create_dataset("fault_tags", data=fault_tags, dtype=int)
         h5f.create_dataset("segment_indices", data=segment_indices, dtype=int)
         h5f.create_dataset("dt", data=dt, dtype="d")

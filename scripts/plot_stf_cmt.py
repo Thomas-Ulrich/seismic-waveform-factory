@@ -46,12 +46,12 @@ ax = fig.add_subplot(111)
 h5f = h5py.File(args.filename, "r")
 STF = h5f["normalized_moment_rate"][:, :]
 print((STF.shape))
-dt = h5f["dt"][0]
+dt = h5f["dt"]
 nsources, ndt = STF.shape
 
 if not args.normalized:
-    moment_tensor = h5f["moment_tensor"][:, :]
-    Mom = np.linalg.norm(moment_tensor, axis=1)
+    moment_tensors = h5f["moment_tensors"][:, :]
+    Mom = np.linalg.norm(moment_tensors, axis=1)
     c = np.diag(Mom)
     STF = np.dot(c, STF)
 h5f.close()
