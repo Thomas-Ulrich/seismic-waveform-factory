@@ -44,9 +44,9 @@ fig = plt.figure(figsize=(4.5, 4.5 * 8.0 / 16), dpi=80)
 ax = fig.add_subplot(111)
 
 h5f = h5py.File(args.filename, "r")
-STF = h5f["normalized_moment_rate"][:, :]
+STF = h5f["normalized_moment_rates"][:, :]
 print((STF.shape))
-dt = h5f["dt"]
+dt = h5f["dt"][0]
 nsources, ndt = STF.shape
 
 if not args.normalized:

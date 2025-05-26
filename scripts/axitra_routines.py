@@ -23,7 +23,7 @@ def create_axitra_source_from_h5(filename):
         nsource, ndt = normalizedMomentRate.shape
         xyz = h5f["xyz"][:, :]
         moment_tensors = h5f["moment_tensors"][:, :]
-        dt = h5f["dt"]
+        dt = h5f["dt"][0]
         sources = np.zeros((nsource, 4))
         sources[:, 0] = np.arange(nsource) + 1
         sources[:, 1] = xyz[:, 1]

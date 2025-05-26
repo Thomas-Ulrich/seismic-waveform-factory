@@ -22,7 +22,7 @@ def create_finite_source_from_h5(db, filename, t1, myproj):
         nsource, ndt = normalized_moment_rates.shape
         xyz = h5f["xyz"][:, :]
         moment_tensors = h5f["moment_tensors"][:, :]
-        dt = h5f["dt"]
+        dt = h5f["dt"][0]
         print(f"sources coordinates in {filename}", xyz)
         if myproj:
             print("projecting back to geocentric")

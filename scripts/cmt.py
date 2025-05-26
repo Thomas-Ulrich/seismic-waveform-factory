@@ -103,12 +103,14 @@ def write_point_source_file(fname, point_sources, dt, proj, is_potency):
     )
 
     with h5py.File(fname, "w") as h5f:
-        h5f.create_dataset("normalized_moment_rates", data=normalized_moment_rates, dtype="d")
+        h5f.create_dataset(
+            "normalized_moment_rates", data=normalized_moment_rates, dtype="d"
+        )
         h5f.create_dataset("xyz", data=xyz, dtype="d")
         h5f.create_dataset("moment_tensors", data=moment_tensors, dtype="d")
         h5f.create_dataset("fault_tags", data=fault_tags, dtype=int)
         h5f.create_dataset("segment_indices", data=segment_indices, dtype=int)
-        h5f.create_dataset("dt", data=dt, dtype="d")
+        h5f.create_dataset("dt", data=[dt], dtype="d")
 
         convention = "geographic" if proj else "projected"
         h5f.attrs["coordinates_convention"] = convention.encode("utf-8")
