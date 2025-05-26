@@ -230,6 +230,7 @@ for fault_tag in fo.unique_fault_tags:
     aNormMRF = np.zeros((nsources, fo.ndt))
     aMomentTensor = np.zeros((nsources, 6))
     axyz = np.zeros((nsources, 3))
+    segment_indices = np.zeros((nsources, 2), dtype=int)
 
     M0_segment = 0
     isrc_segment = 0
@@ -265,6 +266,7 @@ for fault_tag in fo.unique_fault_tags:
                 MomentTensor,
                 xyz,
             )
+            segment_indices[isrc_segment, :] = i, j
             isrc_segment = isrc_segment + 1
 
     M0_eq += M0_segment
@@ -289,6 +291,7 @@ for fault_tag in fo.unique_fault_tags:
         "moment_tensors": aMomentTensor,
         "moment_rate_functions": aNormMRF,
         "locations": axyz,
+        "segment_indices": segment_indices,
     }
 
 prefix = os.path.basename(args.filename.split("-fault")[0])

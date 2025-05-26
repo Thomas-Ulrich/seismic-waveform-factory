@@ -35,7 +35,7 @@ def compute_slices_array(x1, fault_slip, nslices, slip_threshold):
     return np.array([x1min + v0 * dx1 for v0 in myrange])
 
 
-def NED2RTP(aMomentTensor):
+def NED2RTP(moment_tensor):
     """convert array of moment tensor in NED to RTP
     derived from source code of obspy
      https://github.com/obspy/obspy/blob/master/obspy/imaging/source.py#L115
@@ -43,76 +43,75 @@ def NED2RTP(aMomentTensor):
     signs = [1, 1, 1, 1, -1, -1]
     indices = [2, 0, 1, 4, 5, 3]
     return np.array(
-        [sign * aMomentTensor[:, ind] for sign, ind in zip(signs, indices)]
+        [sign * moment_tensor[:, ind] for sign, ind in zip(signs, indices)]
     ).T
 
 
-def RTP2NED(aMomentTensor):
+def RTP2NED(moment_tensor):
     """convert RTP moment tensor to NED
     derived from source code of obspy
     https://github.com/obspy/obspy/blob/master/obspy/imaging/source.py#L115
     """
     signs = [1, 1, 1, -1, 1, -1]
     indices = [1, 2, 0, 5, 3, 4]
-    return np.array([sign * aMomentTensor[ind] for sign, ind in zip(signs, indices)]).T
+    return np.array([sign * moment_tensor[ind] for sign, ind in zip(signs, indices)]).T
 
 
-def compute_moment_tensor(FaceMomentTensor):
-    return np.sum(FaceMomentTensor, axis=1)
+def compute_moment_tensor(face_moment_tensor):
+    return np.sum(face_moment_tensor, axis=1)
 
 
-def compute_seismic_moment(MomentTensor):
+def compute_seismic_moment(moment_tensor):
     """Compute M0 given the moment tensor (6 components)"""
-    fullMomentTensor = np.zeros((3, 3))
-    fullMomentTensor[0, :] = [MomentTensor[0], MomentTensor[3], MomentTensor[4]]
-    fullMomentTensor[1, :] = [MomentTensor[3], MomentTensor[1], MomentTensor[5]]
-    fullMomentTensor[2, :] = [MomentTensor[4], MomentTensor[5], MomentTensor[2]]
+    full_moment_tensor = np.zeros((3, 3))
+    full_moment_tensor[0, :] = [moment_tensor[0], moment_tensor[3], moment_tensor[4]]
+    full_moment_tensor[1, :] = [moment_tensor[3], moment_tensor[1], moment_tensor[5]]
+    full_moment_tensor[2, :] = [moment_tensor[4], moment_tensor[5], moment_tensor[2]]
     # https://gfzpublic.gfz-potsdam.de/rest/items/item_272892/
     # component/file_541895/content (p6)
     # Note that Mom from the moment rate is unprecise
     # Therefore we compute the moment from the final slip here using the Frobenius norm
-    return np.linalg.norm(fullMomentTensor) * np.sqrt(0.5)
+    return np.linalg.norm(full_moment_tensor) * np.sqrt(0.5)
 
 
 def write_point_source_file(fname, point_sources, dt, proj, is_potency):
     """Write h5 file describing a multi point source model."""
-    tags = point_sources.keys()
 
-    for i, fault_tag in enumerate(tags):
-        if i == 0:
-            MomentTensor = point_sources[fault_tag]["moment_tensors"]
-            NormMomentRate = point_sources[fault_tag]["moment_rate_functions"]
-            xyz = point_sources[fault_tag]["locations"]
-            nsources, ndt = NormMomentRate.shape
-            FaultTags = np.zeros((nsources,), dtype=int) + fault_tag
-        else:
-            MomentTensor = np.concatenate(
-                (MomentTensor, point_sources[fault_tag]["moment_tensors"]), axis=0
-            )
-            NormMomentRate = np.concatenate(
-                (NormMomentRate, point_sources[fault_tag]["moment_rate_functions"]),
-                axis=0,
-            )
-            xyz = np.concatenate((xyz, point_sources[fault_tag]["locations"]), axis=0)
-            nsources, ndt = point_sources[fault_tag]["moment_rate_functions"].shape
-            FaultTags_segment = np.zeros((nsources,), dtype=int) + fault_tag
-            FaultTags = np.concatenate((FaultTags, FaultTags_segment), axis=0)
+    if not point_sources:
+        raise ValueError("point_sources cannot be empty")
 
-    nsources, ndt = NormMomentRate.shape
+    # Extract all data using list comprehensions
+    fault_data_list = list(point_sources.values())
+
+    moment_tensor = np.concatenate(
+        [data["moment_tensors"] for data in fault_data_list], axis=0
+    )
+    normalized_moment_rate = np.concatenate(
+        [data["moment_rate_functions"] for data in fault_data_list], axis=0
+    )
+    xyz = np.concatenate([data["locations"] for data in fault_data_list], axis=0)
+    segment_indices = np.concatenate(
+        [data["segment_indices"] for data in fault_data_list], axis=0
+    )
+
+    fault_tags = np.concatenate(
+        [
+            np.full(data["moment_rate_functions"].shape[0], tag, dtype=int)
+            for tag, data in point_sources.items()
+        ],
+        axis=0,
+    )
 
     with h5py.File(fname, "w") as h5f:
-        nsources, ndt = NormMomentRate.shape
-        h5f.create_dataset("NormalizedMomentRate", (nsources, ndt), dtype="d")
-        h5f.create_dataset("xyz", (nsources, 3), dtype="d")
-        h5f.create_dataset("MomentTensor", (nsources, 6), dtype="d")
-        h5f.create_dataset("FaultTags", (nsources,), dtype=int)
-        h5f.create_dataset("dt", (1,), dtype="d")
-        h5f["dt"][0] = dt
-        h5f["NormalizedMomentRate"][:, :] = NormMomentRate[:, :]
-        h5f["MomentTensor"][:, :] = MomentTensor[:, :]
-        h5f["xyz"][:, :] = xyz[:, :]
-        h5f["FaultTags"][:] = FaultTags
+        h5f.create_dataset("normalized_moment_rate", data=normalized_moment_rate, dtype="d")
+        h5f.create_dataset("xyz", data=xyz, dtype="d")
+        h5f.create_dataset("moment_tensor", data=moment_tensor, dtype="d")
+        h5f.create_dataset("fault_tags", data=fault_tags, dtype=int)
+        h5f.create_dataset("segment_indices", data=segment_indices, dtype=int)
+        h5f.create_dataset("dt", data=dt, dtype="d")
+
         convention = "geographic" if proj else "projected"
-        h5f.attrs["CoordinatesConvention"] = np.bytes_(convention)
-        h5f.attrs["IsPotency"] = is_potency
+        h5f.attrs["coordinates_convention"] = convention.encode("utf-8")
+        h5f.attrs["is_potency"] = is_potency
+
     print(f"done writing {fname}")
