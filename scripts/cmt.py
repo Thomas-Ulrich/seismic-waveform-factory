@@ -74,7 +74,7 @@ def compute_seismic_moment(MomentTensor):
     return np.linalg.norm(fullMomentTensor) * np.sqrt(0.5)
 
 
-def write_point_source_file(fname, point_sources, dt, proj):
+def write_point_source_file(fname, point_sources, dt, proj, is_potency):
     """Write h5 file describing a multi point source model."""
     tags = point_sources.keys()
 
@@ -112,9 +112,7 @@ def write_point_source_file(fname, point_sources, dt, proj):
         h5f["MomentTensor"][:, :] = MomentTensor[:, :]
         h5f["xyz"][:, :] = xyz[:, :]
         h5f["FaultTags"][:] = FaultTags
-
-        if proj:
-            h5f.attrs["CoordinatesConvention"] = np.bytes_("geographic")
-        else:
-            h5f.attrs["CoordinatesConvention"] = np.bytes_("projected")
+        convention = "geographic" if proj else "projected"
+        h5f.attrs["CoordinatesConvention"] = np.bytes_(convention)
+        h5f.attrs["IsPotency"] = is_potency
     print(f"done writing {fname}")

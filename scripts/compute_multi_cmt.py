@@ -64,6 +64,13 @@ for sp in [spatial, temporal]:
     )
 
     sp.add_argument(
+        "--potency",
+        dest="potency",
+        action="store_true",
+        help=("compute potency instead of seismic moment (basically use G=1)"),
+    )
+
+    sp.add_argument(
         "--STFfromSR",
         nargs=1,
         metavar=("xdmf SR File"),
@@ -151,7 +158,12 @@ fo.compute_strike_dip(args.refVector)
 fo.compute_rake(args.invertSld)
 fo.compute_barycenter_coords()
 fo.compute_face_area()
-fo.evaluate_G(args.mu)
+
+if args.potency:
+    fo.G = 1.0
+else:
+    fo.evaluate_G(args.mu)
+
 fo.Garea = fo.G * fo.face_area
 
 if args.STFfromSR:
@@ -257,11 +269,17 @@ for fault_tag in fo.unique_fault_tags:
 
     M0_eq += M0_segment
     nsrc_eq += isrc_segment
-    Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07
-    print(
-        f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm)"
-        f", {isrc_segment} sources"
-    )
+    if args.potency:
+        print(
+            f"Potency(segment_{fault_tag})={M0_segment:.2e} m3"
+            f", {isrc_segment} sources"
+        )
+    else:
+        Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07
+        print(
+            f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm)"
+            f", {isrc_segment} sources"
+        )
 
     aMomentTensor = cmt.NED2RTP(aMomentTensor[0:isrc_segment, :])
     aNormMRF = aNormMRF[0:isrc_segment, :]
@@ -278,7 +296,10 @@ if args.command == "temporal":
     fname = f"PointSourceFile_{prefix}_nt{args.DH[0]}_nz{args.NZ[0]}.h5"
 else:
     fname = f"PointSourceFile_{prefix}_dx{args.DH[0]}_nz{args.NZ[0]}.h5"
-cmt.write_point_source_file(fname, point_sources, fo.dt, args.proj)
+cmt.write_point_source_file(fname, point_sources, fo.dt, args.proj, args.potency)
 
-Mw = 2.0 / 3.0 * np.log10(M0_eq) - 6.07
-print(f"Mw(earthquake)={Mw:.2f} ({M0_eq:.2e} Nm), {nsrc_eq} sources")
+if args.potency:
+    print(f"Potency(earthquake)= {M0_eq:.2e} m3, {nsrc_eq} sources")
+else:
+    Mw = 2.0 / 3.0 * np.log10(M0_eq) - 6.07
+    print(f"Mw(earthquake)={Mw:.2f} ({M0_eq:.2e} Nm), {nsrc_eq} sources")
