@@ -9,7 +9,7 @@ parser.add_argument("filename", help="point source file (h5)")
 args = parser.parse_args()
 
 h5f = h5py.File(args.filename, "r")
-aMomentTensor = h5f["MomentTensor"][:, :]
+aMomentTensor = h5f["moment_tensors"][:, :]
 nsource = aMomentTensor.shape[0]
 print("source\tstrike\tdip\trake")
 for i in range(nsource):

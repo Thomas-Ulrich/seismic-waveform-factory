@@ -170,6 +170,7 @@ SHwave_ncol_per_component = config.getint("SH_WAVE", "ncol_per_component")
 
 surface_waves_filter_fmin = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmax")
 surface_waves_filter_fmax = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmin")
+surface_waves_tmin = config.getfloat("SURFACE_WAVES", "tmin", fallback=0.0)
 surface_waves_tmax = config.getfloat("SURFACE_WAVES", "tmax", fallback=None)
 surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
 surface_waves_ncol_per_component = config.getint("SURFACE_WAVES", "ncol_per_component")
@@ -238,7 +239,7 @@ SHwave = WaveformFigureGenerator(
 )
 surface_waves = WaveformFigureGenerator(
     "surface_waves",
-    0.0,
+    surface_waves_tmin,
     surface_waves_tmax,
     surface_waves_filter_fmin,
     surface_waves_filter_fmax,
