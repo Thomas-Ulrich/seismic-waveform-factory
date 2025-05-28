@@ -183,9 +183,16 @@ class FaultOutput:
         moment_tensor[5, :] = -M0 * (cd * cl * ss - c2d * sl * cs)
         self.face_moment_tensor = moment_tensor
 
-    def compute_equivalent_point_source_subfault(self, ids):
+    def compute_equivalent_point_source_subfault(self, ids, use_geometric_center=False):
         """Compute properties of the equivalent moment tensor of a subset ids of faces
-        of the fault outputs."""
+        of the fault outputs.
+        use_geometric_center : bool, optional
+            If True, use the geometric center (area-weighted centroid) of the selected
+            fault faces to define the point source location. This is useful when the
+            location needs to be independent of the moment distribution, such as when
+            reusing Green's functions across different rupture models. If False (default),
+            the location is computed using the moment-weighted center.
+        """
         moment_rate = np.sum(self.face_moment_rate[:, ids], axis=1)
         # Note we do not use np.trapz here because we just want to revert our derivation
         mom = np.sum(moment_rate) * self.dt
@@ -203,6 +210,9 @@ class FaultOutput:
         if m0all > 0:
             corrected_moment_tensor = (mom / m0all) * moment_tensor
 
-        face_moment = np.sum(self.face_moment_rate[:, ids], axis=0) * self.dt
-        xyzc = np.average(self.xyzc[ids, :], axis=0, weights=face_moment)
+        if use_geometric_center:
+            xyzc = np.average(self.xyzc[ids, :], axis=0, weights=self.face_area[ids])
+        else:
+            face_moment = np.sum(self.face_moment_rate[:, ids], axis=0) * self.dt
+            xyzc = np.average(self.xyzc[ids, :], axis=0, weights=face_moment)
         return mom, norm_moment_rate, corrected_moment_tensor, xyzc

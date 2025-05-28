@@ -144,6 +144,18 @@ for sp in [spatial, temporal]:
         ),
     )
 
+    sp.add_argument(
+        "--use_geometric_center",
+        action="store_true",
+        help=(
+            "Use the geometric center (area-weighted centroid) of the selected fault"
+            " face instead of the moment-weighted center to define the point source"
+            " location. This makes the location independent of the moment distribution"
+            ", which is useful when reusing Green's functions across different rupture"
+            " models."
+        ),
+    )
+
 args = parser.parse_args()
 
 if args.proj:
@@ -248,7 +260,9 @@ for fault_tag in fo.unique_fault_tags:
                 NormMRF,
                 MomentTensor,
                 xyz,
-            ) = fo.compute_equivalent_point_source_subfault(selected[ids])
+            ) = fo.compute_equivalent_point_source_subfault(
+                selected[ids], use_geometric_center=args.use_geometric_center
+            )
             if not M0:
                 continue
 
