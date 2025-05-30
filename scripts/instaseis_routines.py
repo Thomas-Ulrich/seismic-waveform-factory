@@ -8,6 +8,7 @@ from cmt import compute_seismic_moment
 import numpy as np
 from scipy.signal import fftconvolve
 import json
+import pyproj
 
 
 def geographic2geocentric(lat):
@@ -32,21 +33,20 @@ def resample_sliprate(slip_rate, dt, dt_new, nsamp):
     return np.interp(t_new, t_old, slip_rate)
 
 
-def transform_to_spherical(xyz, myproj, attrs):
-    if myproj:
-        print("projecting back to geocentric")
-        import pyproj
-
-        myproj = pyproj.Proj(myproj)
-        lla = pyproj.Proj(proj="latlong", ellps="sphere", datum="WGS84")
-        txyz = pyproj.transform(
-            myproj, lla, xyz[:, 0], xyz[:, 1], xyz[:, 2], radians=False
+def transform_to_spherical(xyz, proj_string, attrs):
+    if proj_string:
+        # Define transformer from projected CRS to geographic
+        # (lon, lat, ellipsoidal height)
+        transformer = pyproj.Transformer.from_proj(
+            pyproj.Proj(proj_string),
+            pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84"),
+            always_xy=True,
         )
-        xyz[:, 0] = txyz[0]
-        xyz[:, 1] = txyz[1]
-        # we use the same depth (else it is modified by the ellipsoid to sphere)
-        # xyz[:,2] = txyz[2]
-        print(xyz)
+
+        lon, lat, _ = transformer.transform(xyz[:, 0], xyz[:, 1], xyz[:, 2])
+        xyz[:, 0] = lon
+        xyz[:, 1] = lat
+        # Depth (xyz[:, 2]) is left unchanged intentionally
     else:
         if attrs["coordinates_convention"] == b"geographic":
             xyz[:, 1] = geographic2geocentric(xyz[:, 1])
@@ -139,7 +139,7 @@ def generate_synthetics_instaseis_green(
         dt = h5f["dt"][0]
         fault_tags = h5f["fault_tags"][:]
         segment_indices = h5f["segment_indices"][:, :]
-        print(f"sources coordinates in {filename}", xyz)
+        print(f"sources coordinates in {filename}: {xyz[0,:]} ... ,{nsource} sources")
         xyz = transform_to_spherical(xyz, myproj, h5f.attrs)
 
         # load arguments used for creating the hdf5 file

@@ -399,11 +399,12 @@ class WaveformFigureGenerator:
         shiftmax = int(shift_sec_max * f0)
 
         if self.kind_misfit == "normalized_rms":
-            # well this is rather a misfit
             gof = nanrms(strace.data - otrace.data) / nanrms(otrace.data)
+            # transform misfit to goodness of fit
+            gof = np.exp(-gof)
         elif self.kind_misfit == "min_shifted_normalized_rms":
             gof = np.inf
-            best_shift = 0
+            # best_shift = 0
             for shift in range(-shiftmax, shiftmax + 1):
                 if shift >= 0:
                     s_data = strace.data[shift:]
@@ -415,7 +416,9 @@ class WaveformFigureGenerator:
                 current_gof = nanrms(s_data - o_data) / nanrms(o_data)
                 if current_gof < gof:
                     gof = current_gof
-                    best_shift = shift
+                    # best_shift = shift
+            # transform misfit to goodness of fit
+            gof = np.exp(-gof)
         elif self.kind_misfit == "cross-corelation":
             cc = correlate(strace, otrace, shift=shiftmax)
             shift, gof = xcorr_max(cc)
