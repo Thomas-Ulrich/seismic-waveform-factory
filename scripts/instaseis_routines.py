@@ -2,17 +2,256 @@ import instaseis
 from tqdm import tqdm
 import h5py
 import os
-from obspy import read, Stream
+from obspy import read, Stream, Trace
+from obspy.imaging.beachball import mt2plane, MomentTensor
+from cmt import compute_seismic_moment
+import numpy as np
+from scipy.signal import fftconvolve
+import json
 
 
 def geographic2geocentric(lat):
-    import numpy as np
-
     # geographic to geocentric
     # https://en.wikipedia.org/wiki/Latitude#Geocentric_latitude
     f = 1.0 / 298.257223563
     e2 = 2 * f - f**2
     return np.rad2deg(np.arctan((1 - e2) * np.tan(np.deg2rad(lat))))
+
+
+def resample_sliprate(slip_rate, dt, dt_new, nsamp):
+    """
+    For convolution, the sliprate is needed at the sampling of the fields
+    in the database. This function resamples the sliprate using linear
+    interpolation.
+
+    :param dt: desired sampling
+    :param nsamp: desired number of samples
+    """
+    t_new = np.linspace(0, nsamp * dt_new, nsamp, endpoint=False)
+    t_old = np.linspace(0, dt * len(slip_rate), len(slip_rate), endpoint=False)
+    return np.interp(t_new, t_old, slip_rate)
+
+
+def transform_to_spherical(xyz, myproj, attrs):
+    if myproj:
+        print("projecting back to geocentric")
+        import pyproj
+
+        myproj = pyproj.Proj(myproj)
+        lla = pyproj.Proj(proj="latlong", ellps="sphere", datum="WGS84")
+        txyz = pyproj.transform(
+            myproj, lla, xyz[:, 0], xyz[:, 1], xyz[:, 2], radians=False
+        )
+        xyz[:, 0] = txyz[0]
+        xyz[:, 1] = txyz[1]
+        # we use the same depth (else it is modified by the ellipsoid to sphere)
+        # xyz[:,2] = txyz[2]
+        print(xyz)
+    else:
+        if attrs["coordinates_convention"] == b"geographic":
+            xyz[:, 1] = geographic2geocentric(xyz[:, 1])
+        elif attrs["coordinates_convention"] == b"geocentric":
+            print("coordinates already in geocentric")
+        else:
+            raise ValueError(
+                "coordinates are projected", attrs["coordinates_convention"]
+            )
+    return xyz
+
+
+def load_greens_from_hdf5(
+    hdf5_file, station_code, fault_tag, segment, rake, components
+):
+    key = (
+        f"{station_code}/"
+        f"fault_tag_{fault_tag:03d}/"
+        f"segment_{segment[0]:03d}_{segment[1]:03d}/"
+        f"rake_{rake}"
+    )
+    if not os.path.exists(hdf5_file):
+        return None
+
+    with h5py.File(hdf5_file, "r") as h5f:
+        if key not in h5f:
+            return None
+
+        grp = h5f[key]
+        traces = []
+        for comp in components:
+            data = grp[comp][()]
+            stats_json = grp.attrs.get(f"{comp}_stats", "{}")
+            stats = json.loads(stats_json)
+            trace = Trace(data=data)
+            trace.stats.update(stats)
+            traces.append(trace)
+        return Stream(traces)
+
+
+def save_greens_to_hdf5(
+    hdf5_file, station_code, fault_tag, segment, rake, traces, components
+):
+    key_prefix = (
+        f"{station_code}/"
+        f"fault_tag_{fault_tag:03d}/"
+        f"segment_{segment[0]:03d}_{segment[1]:03d}/"
+        f"rake_{rake}"
+    )
+    with h5py.File(hdf5_file, "a") as h5f:
+        grp = h5f.require_group(key_prefix)
+
+        for trace, comp in zip(traces, components):
+            # Store data
+            if comp in grp:
+                del grp[comp]
+            grp.create_dataset(comp, data=trace.data)
+
+            # Store stats as JSON string
+            stats_str = json.dumps(dict(trace.stats), default=str)
+            grp.attrs[f"{comp}_stats"] = stats_str
+
+
+def check_trace_metadata(trace, src_xyz, lon, lat, epsilon=0.01):
+    checks = {
+        "source_longitude": (trace.stats.source_longitude, src_xyz[0]),
+        "source_latitude": (trace.stats.source_latitude, src_xyz[1]),
+        "source_depth_m": (trace.stats.source_depth_m, -src_xyz[2]),
+        "station_longitude": (trace.stats.station_longitude, lon),
+        "station_latitude": (trace.stats.station_latitude, lat),
+    }
+
+    for key, (actual, expected) in checks.items():
+        if abs(actual - expected) > epsilon:
+            raise ValueError(
+                f"Mismatch in {key}: actual={actual:.6f}, expected={expected:.6f}, "
+                f"diff={abs(actual - expected):.6f} > epsilon={epsilon}"
+            )
+
+
+def generate_synthetics_instaseis_green(
+    db, filename, t1, myproj, kind_vd, components, path_observations, station_coords
+):
+    # read HDF5 and create Finite Source for instaseis
+    with h5py.File(filename) as h5f:
+        normalized_moment_rates = h5f["normalized_moment_rates"][:, :]
+        nsource, ndt = normalized_moment_rates.shape
+        xyz = h5f["xyz"][:, :]
+        moment_tensors = h5f["moment_tensors"][:, :]
+        dt = h5f["dt"][0]
+        fault_tags = h5f["fault_tags"][:]
+        segment_indices = h5f["segment_indices"][:, :]
+        print(f"sources coordinates in {filename}", xyz)
+        xyz = transform_to_spherical(xyz, myproj, h5f.attrs)
+
+        # load arguments used for creating the hdf5 file
+        json_str = h5f["args_json"][()]
+        args_dict = json.loads(json_str)
+        dh = int(args_dict["DH"])
+        NZ = args_dict["NZ"]
+        use_geometric_center = args_dict["use_geometric_center"]
+        slip_threshold = args_dict["slip_threshold"]
+        assert (
+            use_geometric_center
+        ), "for using the green function mode, use_geometric_center should be True"
+        assert (
+            slip_threshold < -1.0
+        ), "for using the green function mode, slip_threshold should be small enough"
+
+    hdf5_file = f"{path_observations}/greens_dh{dh}_nz{NZ}.h5"
+
+    synthetics = Stream()
+
+    nstations = len(station_coords)
+
+    with ProgressBarGreen(nstations * nsource) as progress_bar:
+        for station_code in station_coords:
+            lon, lat = station_coords[station_code]
+            network, station = station_code.split(".")
+
+            # create synthetic data with instaseis
+            receiver = instaseis.Receiver(
+                latitude=geographic2geocentric(lat),
+                longitude=lon,
+                network=network,
+                station=station,
+            )
+            print(f"generating instaseis synthetics for station {station}")
+
+            for isrc in range(nsource):
+                fault_tag = fault_tags[isrc]
+                segment = segment_indices[isrc]
+                nodalplane = mt2plane(MomentTensor(moment_tensors[isrc, :], 1))
+                M0 = compute_seismic_moment(moment_tensors[isrc, :])
+                resampled_moment_rate = resample_sliprate(
+                    normalized_moment_rates[isrc],
+                    dt,
+                    db.info.dt,
+                    int(ndt * dt / db.info.dt),
+                )
+                lst = []
+                for rake in [0, 90]:
+                    st0 = load_greens_from_hdf5(
+                        hdf5_file, station_code, fault_tag, segment, rake, components
+                    )
+                    if st0 is not None:
+                        for i in range(len(components)):
+                            check_trace_metadata(st0[i], xyz[isrc], lon, lat)
+
+                    if not st0:
+                        source = instaseis.Source.from_strike_dip_rake(
+                            latitude=xyz[isrc, 1],
+                            longitude=xyz[isrc, 0],
+                            depth_in_m=-xyz[isrc, 2],
+                            strike=nodalplane.strike,
+                            dip=nodalplane.dip,
+                            rake=rake,
+                            M0=1.0,
+                            origin_time=t1,
+                            dt=dt,
+                        )
+                        st0 = db.get_seismograms(
+                            source=source,
+                            receiver=receiver,
+                            kind=kind_vd,
+                            components=components,
+                            # progress_callback=progress_bar.update_to,
+                        )
+                        for i in range(len(components)):
+                            st0[i].stats.starttime = t1
+                            st0[i].stats.source_longitude = xyz[isrc, 0]
+                            st0[i].stats.source_latitude = xyz[isrc, 1]
+                            st0[i].stats.source_depth_m = -xyz[isrc, 2]
+                            st0[i].stats.station_longitude = lon
+                            st0[i].stats.station_latitude = lat
+
+                        save_greens_to_hdf5(
+                            hdf5_file=hdf5_file,
+                            station_code=station_code,
+                            fault_tag=fault_tag,
+                            segment=segment,
+                            rake=rake,
+                            components=components,
+                            traces=st0,
+                        )
+
+                    lst.append(st0)
+                if isrc == 0:
+                    st = lst[0].copy()
+                    for i in range(len(components)):
+                        st[i].data *= 0
+                rake_rad = np.radians(nodalplane.rake)
+                N = st[i].stats.npts
+                for i in range(len(components)):
+                    G_rake = (
+                        np.cos(rake_rad) * lst[0][i].data
+                        + np.sin(rake_rad) * lst[1][i].data
+                    )
+                    st[i].data += (
+                        0.5
+                        * fftconvolve(G_rake, M0 * resampled_moment_rate, "full")[:N]
+                    )
+                progress_bar.increment(1)
+            synthetics += st
+    return synthetics
 
 
 def create_finite_source_from_h5(db, filename, t1, myproj):
@@ -85,6 +324,16 @@ def create_finite_source_from_usgs(db, fname, M0_percentile_threshold=0.02):
     return sources
 
 
+class ProgressBarGreen(tqdm):
+    """A customized progress bar for tracking the status of synthetics generation."""
+
+    def __init__(self, total):
+        super().__init__(total=total)
+
+    def increment(self, number=1):
+        self.update(number)
+
+
 class ProgressBar(tqdm):
     """A customized progress bar for tracking the status of synthetics generation."""
 
@@ -101,7 +350,37 @@ class ProgressBar(tqdm):
         self.update(self.current0 + current - self.n)
 
 
-def generate_synthetics_instaseis(
+def generate_synthetics_instaseis_green_function_mode(
+    db_name,
+    source_files,
+    station_coords,
+    t1,
+    kind_vd,
+    components,
+    path_observations,
+    projection,
+):
+    db = instaseis.open_db(db_name)
+
+    lst = []
+    for iModel, fname in enumerate(source_files):
+        synth = generate_synthetics_instaseis_green(
+            db,
+            fname,
+            t1,
+            projection,
+            kind_vd,
+            components,
+            path_observations,
+            station_coords,
+        )
+        lst.append(synth)
+        print(synth)
+
+    return lst
+
+
+def generate_synthetics_instaseis_classical_mode(
     db_name,
     source_files,
     station_coords,
@@ -175,4 +454,46 @@ def generate_synthetics_instaseis(
                 lst[iModel] += st0
                 progress_bar.increment(n_point_sources[iModel])
             print("done")
+    return lst
+
+
+def generate_synthetics_instaseis(
+    db_name,
+    source_files,
+    station_coords,
+    t1,
+    kind_vd,
+    components,
+    path_observations,
+    projection,
+    modes=["classical"],
+):
+    lst = []
+    if "classical" in modes:
+        lst1 = generate_synthetics_instaseis_classical_mode(
+            db_name,
+            source_files,
+            station_coords,
+            t1,
+            kind_vd,
+            components,
+            path_observations,
+            projection,
+        )
+        lst += lst1
+
+    if "green_functions" in modes:
+        lst2 = generate_synthetics_instaseis_green_function_mode(
+            db_name,
+            source_files,
+            station_coords,
+            t1,
+            kind_vd,
+            components,
+            path_observations,
+            projection,
+        )
+        lst += lst2
+    if ("green_functions" not in modes) and ("classical" not in modes):
+        raise ValueError(f"unknown instaseis modes {modes}")
     return lst

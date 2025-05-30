@@ -94,6 +94,9 @@ if "instaseis" in software:
     from instaseis_routines import generate_synthetics_instaseis
 
     db_name = config.get("GENERAL", "db")
+    instaseis_modes = config.get("GENERAL", "instaseis_mode", fallback="classical")
+    instaseis_modes = [item.strip() for item in instaseis_modes.split(",")]
+
     prefix = f"{prefix}_instaseis"
 
 if ("axitra" in software) or ("pyprop8" in software):
@@ -328,6 +331,7 @@ if "instaseis" in software and source_files:
         components,
         path_observations,
         projection,
+        instaseis_modes,
     )
     list_synthetics_all += list_synthetics
 

@@ -190,8 +190,8 @@ class FaultOutput:
             If True, use the geometric center (area-weighted centroid) of the selected
             fault faces to define the point source location. This is useful when the
             location needs to be independent of the moment distribution, such as when
-            reusing Green's functions across different rupture models. If False (default),
-            the location is computed using the moment-weighted center.
+            reusing Green's functions across different rupture models. If False
+            (default), the location is computed using the moment-weighted center.
         """
         moment_rate = np.sum(self.face_moment_rate[:, ids], axis=1)
         # Note we do not use np.trapz here because we just want to revert our derivation
