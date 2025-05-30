@@ -87,8 +87,8 @@ class WaveformFigureGenerator:
         self.n_kinematic_models = n_kinematic_models
         assert kind_misfit in [
             "cross-correlation",
-            "rRMS",
-            "rRMS_shifted",
+            "normalized_rms",
+            "min_shifted_normalized_rms",
             "time-frequency",
         ]
         self.kind_misfit = kind_misfit
@@ -99,6 +99,7 @@ class WaveformFigureGenerator:
         self.relative_offset = relative_offset
         self.annotations = annotations
         self.global_legend_labels = global_legend_labels
+        self.estimated_travel_time = 0.0
 
     def init_gof_pandas_df(self):
         columns = ["station", "distance", "azimuth"]
@@ -109,6 +110,9 @@ class WaveformFigureGenerator:
         for i in range(self.n_kinematic_models):
             columns += [f"{self.signal_kind}_{comp}{i}" for comp in self.components]
         self.gof_df = pd.DataFrame(columns=columns)
+
+    def set_estimated_travel_time(self, travel_time):
+        self.estimated_travel_time = travel_time
 
     def init_several_stations_figure(self, nstations):
         nrow = int(np.ceil(nstations / self.ncol_per_component))
@@ -387,26 +391,31 @@ class WaveformFigureGenerator:
         def nanrms(x, axis=None):
             return np.sqrt(np.nanmean(x**2, axis=axis))
 
-        shift_sec_max = 100.0 if self.signal_kind == "surface_waves" else 5.0
+        shift_sec_max = (
+            100.0
+            if self.signal_kind == "surface_waves"
+            else max(2.5, 0.025 * self.estimated_travel_time)
+        )
         shiftmax = int(shift_sec_max * f0)
 
-        if self.kind_misfit == "rRMS":
+        if self.kind_misfit == "normalized_rms":
             # well this is rather a misfit
             gof = nanrms(strace.data - otrace.data) / nanrms(otrace.data)
-        elif self.kind_misfit == "rRMS_shifted":
+        elif self.kind_misfit == "min_shifted_normalized_rms":
             gof = np.inf
+            best_shift = 0
             for shift in range(-shiftmax, shiftmax + 1):
-                if shift > 0:
-                    gof1 = nanrms(strace.data[shift:] - otrace.data[:-shift]) / nanrms(
-                        otrace.data[:-shift]
-                    )
-                elif shift < 0:
-                    gof1 = nanrms(otrace.data[shift:] - strace.data[:-shift]) / nanrms(
-                        otrace.data[shift:]
-                    )
+                if shift >= 0:
+                    s_data = strace.data[shift:]
+                    o_data = otrace.data[:-shift] if shift > 0 else otrace.data
                 else:
-                    gof1 = nanrms(strace.data - otrace.data) / nanrms(otrace.data)
-                gof = min(gof, gof1)
+                    shift_abs = abs(shift)
+                    s_data = strace.data[:-shift_abs]
+                    o_data = otrace.data[shift_abs:]
+                current_gof = nanrms(s_data - o_data) / nanrms(o_data)
+                if current_gof < gof:
+                    gof = current_gof
+                    best_shift = shift
         elif self.kind_misfit == "cross-corelation":
             cc = correlate(strace, otrace, shift=shiftmax)
             shift, gof = xcorr_max(cc)

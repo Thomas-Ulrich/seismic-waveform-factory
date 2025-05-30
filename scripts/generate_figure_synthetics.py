@@ -149,7 +149,19 @@ line_widths = extend_if_necessary(line_widths, n_syn_model, "line_widths")
 
 
 path_observations = config.get("GENERAL", "path_observations")
-kind_misfit = config.get("GENERAL", "Misfit", fallback="rRMS")
+kind_misfit = config.get("GENERAL", "Misfit", fallback="min_shifted_normalized_rms")
+
+valid_misfits = {
+    "min_shifted_normalized_rms",
+    "normalized_rms",
+    "cross_correlation",
+    "time-frequency",
+}
+if kind_misfit not in valid_misfits:
+    raise ValueError(
+        f"Invalid misfit kind: {kind_misfit}. Must be one of {valid_misfits}"
+    )
+
 
 plt.rcParams.update({"font.size": font_size})
 
@@ -379,10 +391,12 @@ for ins, station_code in enumerate(station_coords):
 
     if Pwave.enabled:
         tP = estimate_travel_time(hypo_depth_in_km, dist, station, "P")
+        Pwave.set_estimated_travel_time(tP)
         Pwave.add_plot_station(st_obs0, lst, t1 + tP, ins)
 
     if SHwave.enabled:
         tS = estimate_travel_time(hypo_depth_in_km, dist, station, "S")
+        SHwave.set_estimated_travel_time(tS)
         SHwave.add_plot_station(st_obs0, lst, t1 + tS, ins)
 
     if surface_waves.enabled:
