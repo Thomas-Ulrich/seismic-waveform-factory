@@ -436,7 +436,8 @@ source_files_inc_seissol = [seissol_outputs[k] for k in range(n_seissol_model)] 
 df_station_average["source_file"] = [source_files_inc_seissol[k] for k in file_id]
 print(df_station_average)
 
-fname = "gof_average.pkl"
+waveform_type = "teleseismic" if "instaseis" in software else "regional"
+fname = f"gof_{waveform_type}_waveforms_average.pkl"
 df_station_average.to_pickle(fname)
 print(f"done writing {fname}")
 
