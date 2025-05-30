@@ -75,7 +75,7 @@ def compute_seismic_moment(moment_tensor):
     return np.linalg.norm(full_moment_tensor) * np.sqrt(0.5)
 
 
-def write_point_source_file(fname, point_sources, dt, proj, is_potency):
+def write_point_source_file(fname, point_sources, dt, proj, is_potency, json_str):
     """Write h5 file describing a multi point source model."""
 
     if not point_sources:
@@ -116,5 +116,8 @@ def write_point_source_file(fname, point_sources, dt, proj, is_potency):
         convention = "geographic" if proj else "projected"
         h5f.attrs["coordinates_convention"] = convention.encode("utf-8")
         h5f.attrs["is_potency"] = is_potency
+
+        dtype = h5py.string_dtype(encoding="utf-8")
+        h5f.create_dataset("args_json", data=json_str, dtype=dtype)
 
     print(f"done writing {fname}")
