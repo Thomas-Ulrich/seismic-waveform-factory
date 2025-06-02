@@ -156,8 +156,8 @@ def generate_synthetics_instaseis_green(
             slip_threshold < -1.0
         ), "for using the green function mode, slip_threshold should be small enough"
 
-    hdf5_file = f"{path_observations}/greens_dh{dh}_nz{NZ}.h5"
-
+    db_name = f"{db.info.velocity_model}_{db.info.period}s"
+    hdf5_file = f"{path_observations}/greens_{db_name}_dh{dh}_nz{NZ}.h5"
     synthetics = Stream()
 
     nstations = len(station_coords)
