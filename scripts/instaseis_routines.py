@@ -6,9 +6,68 @@ from obspy import read, Stream, Trace
 from obspy.imaging.beachball import mt2plane, MomentTensor
 from cmt import compute_seismic_moment
 import numpy as np
-from scipy.signal import fftconvolve
 import json
 import pyproj
+from collections import defaultdict
+from scipy.signal import hann
+
+
+def fft_reconvolve_stf(db, trace_data, new_stf):
+    """
+    Deconvolve the original STF from a seismogram and convolve a new STF using FFT.
+
+    Parameters:
+    ----------
+    db : instaseis.Database
+        Instaseis database object, must have .info.sliprate and .info.dt.
+    trace_data : np.ndarray
+        Time series data (1D array) from Instaseis.
+    new_stf : np.ndarray
+        New STF to convolve with, e.g. moment-rate function. Must be bandlimited.
+    Returns:
+    --------
+    np.ndarray
+        Modified seismogram after deconvolution and convolution.
+    """
+
+    original_stf = db.info.sliprate
+    dt = db.info.dt
+    L = len(trace_data)
+    nfft = int(2 ** np.ceil(np.log2(L + len(new_stf) - 1)))
+
+    # FFT of original STF (with zero-padding)
+    orig_stf_f = np.fft.rfft(original_stf, n=nfft)
+    imax = np.argmax(original_stf)
+    imin = np.argmin(original_stf)
+    time_shift = 0.5 * (imax + imin) * dt
+    if time_shift != 0.0:
+        freqs = np.fft.rfftfreq(nfft, dt)
+        orig_stf_f *= np.exp(1j * 2 * np.pi * freqs * time_shift)
+
+    # FFT of new STF (with zero-padding)
+    new_stf_f = np.fft.rfft(new_stf, n=nfft)
+
+    # Apply taper to trace data to reduce ringing
+    taper = np.ones_like(trace_data)
+    taper_len = max(int(0.05 * L), 5)
+    taper[-taper_len:] = hann(2 * taper_len)[taper_len:]
+    tapered_trace = trace_data * taper
+
+    # FFT of trace data
+    data_f = np.fft.rfft(tapered_trace, n=nfft)
+
+    # Deconvolve: avoid division by zero
+    mask = np.abs(orig_stf_f) > 1e-12
+    recon_f = np.zeros_like(data_f)
+    recon_f[mask] = data_f[mask] / orig_stf_f[mask]
+    recon_f[~mask] = 0.0
+
+    # Convolve with new STF in frequency domain
+    final_f = recon_f * new_stf_f
+
+    # Inverse FFT and truncate to original length
+    result = np.fft.irfft(final_f)[:L]
+    return result
 
 
 def geographic2geocentric(lat):
@@ -128,7 +187,15 @@ def check_trace_metadata(trace, src_xyz, lon, lat, epsilon=0.01):
 
 
 def generate_synthetics_instaseis_green(
-    db, filename, t1, myproj, kind_vd, components, path_observations, station_coords
+    db,
+    filename,
+    t1,
+    myproj,
+    kind_vd,
+    components,
+    path_observations,
+    station_coords,
+    progress_bar,
 ):
     # read HDF5 and create Finite Source for instaseis
     with h5py.File(filename) as h5f:
@@ -160,97 +227,96 @@ def generate_synthetics_instaseis_green(
     hdf5_file = f"{path_observations}/greens_{db_name}_dh{dh}_nz{NZ}.h5"
     synthetics = Stream()
 
-    nstations = len(station_coords)
+    for station_code in station_coords:
+        lon, lat = station_coords[station_code]
+        network, station = station_code.split(".")
 
-    with ProgressBarGreen(nstations * nsource) as progress_bar:
-        for station_code in station_coords:
-            lon, lat = station_coords[station_code]
-            network, station = station_code.split(".")
+        # create synthetic data with instaseis
+        receiver = instaseis.Receiver(
+            latitude=geographic2geocentric(lat),
+            longitude=lon,
+            network=network,
+            station=station,
+        )
+        # print(f"generating instaseis synthetics for station {station}")
 
-            # create synthetic data with instaseis
-            receiver = instaseis.Receiver(
-                latitude=geographic2geocentric(lat),
-                longitude=lon,
-                network=network,
-                station=station,
+        for isrc in range(nsource):
+            fault_tag = fault_tags[isrc]
+            segment = segment_indices[isrc]
+            nodalplane = mt2plane(MomentTensor(moment_tensors[isrc, :], 1))
+            M0 = compute_seismic_moment(moment_tensors[isrc, :])
+            resampled_moment_rate = resample_sliprate(
+                normalized_moment_rates[isrc],
+                dt,
+                db.info.dt,
+                int(ndt * dt / db.info.dt),
             )
-            print(f"generating instaseis synthetics for station {station}")
-
-            for isrc in range(nsource):
-                fault_tag = fault_tags[isrc]
-                segment = segment_indices[isrc]
-                nodalplane = mt2plane(MomentTensor(moment_tensors[isrc, :], 1))
-                M0 = compute_seismic_moment(moment_tensors[isrc, :])
-                resampled_moment_rate = resample_sliprate(
-                    normalized_moment_rates[isrc],
-                    dt,
-                    db.info.dt,
-                    int(ndt * dt / db.info.dt),
+            lst = []
+            for rake in [0, 90]:
+                st0 = load_greens_from_hdf5(
+                    hdf5_file, station_code, fault_tag, segment, rake, components
                 )
-                lst = []
-                for rake in [0, 90]:
-                    st0 = load_greens_from_hdf5(
-                        hdf5_file, station_code, fault_tag, segment, rake, components
-                    )
-                    if st0 is not None:
-                        for i in range(len(components)):
-                            check_trace_metadata(st0[i], xyz[isrc], lon, lat)
-
-                    if not st0:
-                        source = instaseis.Source.from_strike_dip_rake(
-                            latitude=xyz[isrc, 1],
-                            longitude=xyz[isrc, 0],
-                            depth_in_m=-xyz[isrc, 2],
-                            strike=nodalplane.strike,
-                            dip=nodalplane.dip,
-                            rake=rake,
-                            M0=1.0,
-                            origin_time=t1,
-                            dt=dt,
-                        )
-                        st0 = db.get_seismograms(
-                            source=source,
-                            receiver=receiver,
-                            kind=kind_vd,
-                            components=components,
-                            # progress_callback=progress_bar.update_to,
-                        )
-                        for i in range(len(components)):
-                            st0[i].stats.starttime = t1
-                            st0[i].stats.source_longitude = xyz[isrc, 0]
-                            st0[i].stats.source_latitude = xyz[isrc, 1]
-                            st0[i].stats.source_depth_m = -xyz[isrc, 2]
-                            st0[i].stats.station_longitude = lon
-                            st0[i].stats.station_latitude = lat
-
-                        save_greens_to_hdf5(
-                            hdf5_file=hdf5_file,
-                            station_code=station_code,
-                            fault_tag=fault_tag,
-                            segment=segment,
-                            rake=rake,
-                            components=components,
-                            traces=st0,
-                        )
-
-                    lst.append(st0)
-                if isrc == 0:
-                    st = lst[0].copy()
+                if st0 is not None:
                     for i in range(len(components)):
-                        st[i].data *= 0
-                rake_rad = np.radians(nodalplane.rake)
-                N = st[i].stats.npts
+                        check_trace_metadata(st0[i], xyz[isrc], lon, lat)
+
+                if not st0:
+                    source = instaseis.Source.from_strike_dip_rake(
+                        latitude=xyz[isrc, 1],
+                        longitude=xyz[isrc, 0],
+                        depth_in_m=-xyz[isrc, 2],
+                        strike=nodalplane.strike,
+                        dip=nodalplane.dip,
+                        rake=rake,
+                        M0=1.0,
+                        origin_time=t1,
+                        dt=dt,
+                    )
+                    sliprate = np.zeros_like(db.info.sliprate)
+                    sliprate[1] = 1.0 / db.info.dt
+                    st0 = db.get_seismograms(
+                        source=source,
+                        receiver=receiver,
+                        kind=kind_vd,
+                        components=components,
+                        # sliprate = sliprate
+                    )
+                    for i in range(len(components)):
+                        st0[i].stats.starttime = t1
+                        st0[i].stats.source_longitude = xyz[isrc, 0]
+                        st0[i].stats.source_latitude = xyz[isrc, 1]
+                        st0[i].stats.source_depth_m = -xyz[isrc, 2]
+                        st0[i].stats.station_longitude = lon
+                        st0[i].stats.station_latitude = lat
+
+                    save_greens_to_hdf5(
+                        hdf5_file=hdf5_file,
+                        station_code=station_code,
+                        fault_tag=fault_tag,
+                        segment=segment,
+                        rake=rake,
+                        components=components,
+                        traces=st0,
+                    )
+                    progress_bar.increment(1)
+
+                lst.append(st0)
+            if isrc == 0:
+                st = lst[0].copy()
                 for i in range(len(components)):
-                    G_rake = (
-                        np.cos(rake_rad) * lst[0][i].data
-                        + np.sin(rake_rad) * lst[1][i].data
-                    )
-                    st[i].data += (
-                        0.5
-                        * fftconvolve(G_rake, M0 * resampled_moment_rate, "full")[:N]
-                    )
-                progress_bar.increment(1)
-            synthetics += st
+                    st[i].data *= 0
+            rake_rad = np.radians(nodalplane.rake)
+            for i in range(len(components)):
+                G_rake0 = fft_reconvolve_stf(
+                    db, lst[0][i].data, np.gradient(resampled_moment_rate)
+                )
+                G_rake90 = fft_reconvolve_stf(
+                    db, lst[1][i].data, np.gradient(resampled_moment_rate)
+                )
+                st[i].data += M0 * (
+                    np.cos(rake_rad) * G_rake0 + np.sin(rake_rad) * G_rake90
+                )
+        synthetics += st
     return synthetics
 
 
@@ -350,6 +416,47 @@ class ProgressBar(tqdm):
         self.update(self.current0 + current - self.n)
 
 
+def get_unique_segments_per_tag(source_files):
+    # Step 1: Collect all available fault tags
+    with h5py.File(source_files[0], "r") as h5f:
+        fault_tags = h5f["fault_tags"][:]
+        available_fault_tags = set(fault_tags)
+
+    print("Available fault tags:", available_fault_tags)
+
+    # Step 2: Dictionary to hold unique segment indices per fault tag
+    segments_per_tag = defaultdict(set)
+
+    # Step 3: Loop through files and gather segment indices
+    for fname in source_files:
+        with h5py.File(fname, "r") as h5f:
+            fault_tags = h5f["fault_tags"][:]
+            segment_indices = h5f["segment_indices"][:]  # Assumes shape (N, M)
+
+            for k in available_fault_tags:
+                ids = np.where(fault_tags == k)[0]  # 1D array of indices
+                segs = segment_indices[ids]  # shape (len(ids), M)
+
+                # Convert rows to tuples for hashability and store in set
+                for row in segs:
+                    segments_per_tag[k].add(tuple(row))
+
+    # Convert sets back to sorted lists of arrays (optional)
+    unique_segments_per_tag = {
+        k: np.array(sorted(list(v))) for k, v in segments_per_tag.items()
+    }
+    all_unique_segments = set()
+
+    for segments in unique_segments_per_tag.values():
+        for row in segments:
+            all_unique_segments.add(tuple(row))  # Convert row to tuple for set
+
+    total_unique_segments = len(all_unique_segments)
+    print("Total number of unique segment_indices:", total_unique_segments)
+
+    return total_unique_segments
+
+
 def generate_synthetics_instaseis_green_function_mode(
     db_name,
     source_files,
@@ -363,19 +470,24 @@ def generate_synthetics_instaseis_green_function_mode(
     db = instaseis.open_db(db_name)
 
     lst = []
-    for iModel, fname in enumerate(source_files):
-        synth = generate_synthetics_instaseis_green(
-            db,
-            fname,
-            t1,
-            projection,
-            kind_vd,
-            components,
-            path_observations,
-            station_coords,
-        )
-        lst.append(synth)
-        print(synth)
+    if len(source_files) == 0:
+        return lst
+
+    total_unique_segments = get_unique_segments_per_tag(source_files)
+    with ProgressBarGreen(total_unique_segments * len(station_coords)) as progress_bar:
+        for iModel, fname in enumerate(source_files):
+            synth = generate_synthetics_instaseis_green(
+                db,
+                fname,
+                t1,
+                projection,
+                kind_vd,
+                components,
+                path_observations,
+                station_coords,
+                progress_bar,
+            )
+            lst.append(synth)
 
     return lst
 
