@@ -293,6 +293,7 @@ for fault_tag in fo.unique_fault_tags:
     aMomentTensor = cmt.NED2RTP(aMomentTensor[0:isrc_segment, :])
     aNormMRF = aNormMRF[0:isrc_segment, :]
     axyz = axyz[0:isrc_segment, :]
+    segment_indices = segment_indices[0:isrc_segment, :]
 
     point_sources[fault_tag] = {
         "moment_tensors": aMomentTensor,
