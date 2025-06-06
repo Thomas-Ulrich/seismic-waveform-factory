@@ -284,7 +284,7 @@ for fault_tag in fo.unique_fault_tags:
             f", {isrc_segment} sources"
         )
     else:
-        Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07
+        Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07 if M0_segment else 0.0
         print(
             f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm)"
             f", {isrc_segment} sources"
