@@ -206,7 +206,12 @@ def generate_synthetics_instaseis_green(
         dt = h5f["dt"][0]
         fault_tags = h5f["fault_tags"][:]
         segment_indices = h5f["segment_indices"][:, :]
-        print(f"sources coordinates in {filename}: {xyz[0,:]} ... ,{nsource} sources")
+        if nsource > 0:
+            print(
+                f"sources coordinates in {filename}: {xyz[0,:]} ... ,{nsource} sources"
+            )
+        else:
+            print(f"{filename} has no sources")
         xyz = transform_to_spherical(xyz, myproj, h5f.attrs)
 
         # load arguments used for creating the hdf5 file
