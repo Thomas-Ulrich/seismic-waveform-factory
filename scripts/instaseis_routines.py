@@ -208,7 +208,7 @@ def generate_synthetics_instaseis_green(
         segment_indices = h5f["segment_indices"][:, :]
         if nsource > 0:
             print(
-                f"sources coordinates in {filename}: {xyz[0,:]} ... ,{nsource} sources"
+                f"sources coordinates in {filename}: {xyz[0, :]} ..., {nsource} sources"
             )
         else:
             print(f"{filename} has no sources")
