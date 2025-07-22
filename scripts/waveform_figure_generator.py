@@ -57,15 +57,7 @@ class WaveformFigureGenerator:
     def __init__(
         self,
         signal_kind,
-        t_before,
-        t_after,
-        taper,
-        filter_fmin,
-        filter_fmax,
-        enabled,
-        ncol_per_component,
         nstations,
-        components,
         n_kinematic_models,
         kind_misfit,
         colors,
@@ -75,6 +67,14 @@ class WaveformFigureGenerator:
         relative_offset,
         annotations,
         global_legend_labels,
+        t_before,
+        t_after,
+        taper,
+        filter_fmin,
+        filter_fmax,
+        enabled,
+        ncol_per_component,
+        components,
     ):
         self.components = components
         self.signal_kind = signal_kind
@@ -124,10 +124,10 @@ class WaveformFigureGenerator:
         # for comparing signals on the same figure
         if self.signal_kind in ["P", "SH"]:
             height_one_plot = 1.7
-            surface_waves_signa_plot = False
+            generic_plot = False
         else:
             height_one_plot = 1.5
-            surface_waves_signa_plot = True
+            generic_plot = True
         fig, axarr = plt.subplots(
             nrow,
             ncol,
@@ -142,13 +142,13 @@ class WaveformFigureGenerator:
                 axi = axarr[i, j]
                 if self.normalize:
                     axi.set_yticks([])
-                if j > 0 and surface_waves_signa_plot:
+                if j > 0 and generic_plot:
                     axi.set_yticks([])
                     axi.spines["left"].set_visible(False)
                     axi.get_shared_y_axes().joined(axi, axarr[i, 0])
                 remove_top_right_axes(axi)
                 axi.tick_params(axis="x", zorder=3)
-                if i < nrow - 1 and surface_waves_signa_plot:
+                if i < nrow - 1 and generic_plot:
                     axi.spines["bottom"].set_visible(False)
                     axi.set_xticks([])
                 if j * nrow + i >= self.ncomp * nstations:
@@ -264,7 +264,7 @@ class WaveformFigureGenerator:
             return j + ista // nrows
 
         ylabel = f"{network}.{station}"
-        if self.signal_kind == "surface_waves":
+        if self.signal_kind == "generic":
             self.axarr[ins, 0].set_ylabel(ylabel)
 
         for j, comp in enumerate(self.components):
@@ -398,7 +398,7 @@ class WaveformFigureGenerator:
 
         shift_sec_max = (
             100.0
-            if self.signal_kind == "surface_waves"
+            if self.signal_kind == "generic"
             else max(2.5, 0.025 * self.estimated_travel_time)
         )
         shiftmax = int(shift_sec_max * f0)
@@ -460,7 +460,7 @@ class WaveformFigureGenerator:
     def finalize_and_save_fig(self, fname):
         if self.global_legend_labels:
             self.add_global_legend()
-        if self.signal_kind == "surface_waves":
+        if self.signal_kind == "generic":
             direction = {"E": "EW", "N": "NS", "Z": "UD"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])

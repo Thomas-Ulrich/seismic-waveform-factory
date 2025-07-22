@@ -167,32 +167,53 @@ plt.rcParams.update({"font.size": font_size})
 
 os.makedirs(path_observations, exist_ok=True)
 
-Pwave_tmin = -config.getfloat("P_WAVE", "t_before")
-Pwave_tmax = config.getfloat("P_WAVE", "t_after")
-Pwave_taper = config.getboolean("P_WAVES", "taper", fallback=True)
-Pwave_filter_fmin = 1.0 / config.getfloat("P_WAVE", "filter_tmax")
-Pwave_filter_fmax = 1.0 / config.getfloat("P_WAVE", "filter_tmin")
-Pwave_enabled = config.getboolean("P_WAVE", "enabled")
-Pwave_ncol_per_component = config.getint("P_WAVE", "ncol_per_component")
+
+def get_wave_config(config, section_names):
+    # determine section name from all possibilities
+    section = None
+    for section_name in section_names:
+        if config.has_section(section_name):
+            section = section_name
+            break
+    if not section:
+        raise ValueError(f"none of {section_names} found in config")
+
+    if config.has_option(section, "t_before"):
+        t_before = -config.getfloat(section, "t_before")
+        t_after = config.getfloat(section, "t_after")
+    elif config.has_option(section, "tmax"):
+        t_before = config.getfloat(section, "tmin", fallback=0.0)
+        t_after = config.getfloat(section, "tmax", fallback=None)
+
+    taper = config.getboolean(section, "taper", fallback=True)
+    filter_fmin = 1.0 / config.getfloat(section, "filter_tmax")
+    filter_fmax = 1.0 / config.getfloat(section, "filter_tmin")
+    enabled = config.getboolean(section, "enabled")
+    ncol = config.getint(section, "ncol_per_component")
+
+    # Optionally get components, fallback empty list if missing
+    if config.has_option(section, "components"):
+        components = [c.strip() for c in config.get(section, "components").split(",")]
+    elif section in ["P_WAVE"]:
+        components = ["Z"]
+    elif section in ["SH_WAVE"]:
+        components = ["T"]
+
+    return {
+        "t_before": t_before,
+        "t_after": t_after,
+        "taper": taper,
+        "filter_fmin": filter_fmin,
+        "filter_fmax": filter_fmax,
+        "enabled": enabled,
+        "ncol_per_component": ncol,
+        "components": components,
+    }
 
 
-SHwave_tmin = -config.getfloat("SH_WAVE", "t_before")
-SHwave_tmax = config.getfloat("SH_WAVE", "t_after")
-SHwave_taper = config.getboolean("SH_WAVES", "taper", fallback=True)
-SHwave_filter_fmin = 1.0 / config.getfloat("SH_WAVE", "filter_tmax")
-SHwave_filter_fmax = 1.0 / config.getfloat("SH_WAVE", "filter_tmin")
-SHwave_enabled = config.getboolean("SH_WAVE", "enabled")
-SHwave_ncol_per_component = config.getint("SH_WAVE", "ncol_per_component")
-
-
-surface_waves_filter_fmin = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmax")
-surface_waves_filter_fmax = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmin")
-surface_waves_taper = config.getboolean("SURFACE_WAVES", "taper", fallback=True)
-surface_waves_tmin = config.getfloat("SURFACE_WAVES", "tmin", fallback=0.0)
-surface_waves_tmax = config.getfloat("SURFACE_WAVES", "tmax", fallback=None)
-surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
-surface_waves_ncol_per_component = config.getint("SURFACE_WAVES", "ncol_per_component")
-surface_waves_components = config.get("SURFACE_WAVES", "components").split(",")
+p_window_config = get_wave_config(config, ["P_WAVE"])
+s_window_config = get_wave_config(config, ["SH_WAVE"])
+origin_time_window_config = get_wave_config(config, ["GENERIC_WAVE", "SURFACE_WAVES"])
 
 processed_data = {}
 if config.has_section("PROCESSED_WAVEFORMS"):
@@ -215,17 +236,10 @@ print(station_coords)
 
 nstations = len(station_coords)
 
+
 Pwave = WaveformFigureGenerator(
     "P",
-    Pwave_tmin,
-    Pwave_tmax,
-    Pwave_taper,
-    Pwave_filter_fmin,
-    Pwave_filter_fmax,
-    Pwave_enabled,
-    Pwave_ncol_per_component,
     nstations,
-    ["Z"],
     n_syn_model,
     kind_misfit,
     colors,
@@ -235,18 +249,12 @@ Pwave = WaveformFigureGenerator(
     relative_offset,
     annotations,
     global_legend_labels,
+    **p_window_config,
 )
+
 SHwave = WaveformFigureGenerator(
     "SH",
-    SHwave_tmin,
-    SHwave_tmax,
-    SHwave_taper,
-    SHwave_filter_fmin,
-    SHwave_filter_fmax,
-    SHwave_enabled,
-    SHwave_ncol_per_component,
     nstations,
-    ["T"],
     n_syn_model,
     kind_misfit,
     colors,
@@ -256,18 +264,11 @@ SHwave = WaveformFigureGenerator(
     relative_offset,
     annotations,
     global_legend_labels,
+    **s_window_config,
 )
-surface_waves = WaveformFigureGenerator(
-    "surface_waves",
-    surface_waves_tmin,
-    surface_waves_tmax,
-    surface_waves_taper,
-    surface_waves_filter_fmin,
-    surface_waves_filter_fmax,
-    surface_waves_enabled,
-    surface_waves_ncol_per_component,
+generic_wave = WaveformFigureGenerator(
+    "generic",
     nstations,
-    surface_waves_components,
     n_syn_model,
     kind_misfit,
     colors,
@@ -277,11 +278,12 @@ surface_waves = WaveformFigureGenerator(
     relative_offset,
     annotations,
     global_legend_labels,
+    **origin_time_window_config,
 )
 
 components = ["E", "N", "Z"]
 
-if Pwave_enabled and not (SHwave_enabled or surface_waves_enabled):
+if Pwave.enabled and not (SHwave.enabled or generic_wave.enabled):
     # we do not need to compute E and N if Pwave only
     components = ["Z"]
 
@@ -319,8 +321,8 @@ if "axitra" in software and source_files:
     )
     list_synthetics_all += list_synthetics
     t_obs_before, t_obs_after = 100, 400
-    if not surface_waves_tmax:
-        surface_waves.tmax = duration
+    if not generic_wave.t_after:
+        generic_wave.t_after = duration
 
 if "pyprop8" in software and source_files:
     from pyprop8_routines import generate_synthetics_pyprop8
@@ -336,8 +338,8 @@ if "pyprop8" in software and source_files:
     )
     list_synthetics_all += list_synthetics
     t_obs_before, t_obs_after = 100, 400
-    if not surface_waves_tmax:
-        surface_waves.tmax = duration
+    if not generic_wave.t_after:
+        generic_wave.t_after = duration
 
 if "instaseis" in software and source_files:
     list_synthetics = generate_synthetics_instaseis(
@@ -358,8 +360,8 @@ if "instaseis" in software and source_files:
     )
 
     t_obs_before, t_obs_after = 1000, duration_synthetics + 1000
-    if not surface_waves_tmax:
-        surface_waves.tmax = duration_synthetics
+    if not generic_wave.t_after:
+        generic_wave.t_after = duration_synthetics
 
 starttime = t1 - t_obs_before
 endtime = t1 + t_obs_after
@@ -405,13 +407,13 @@ for ins, station_code in enumerate(station_coords):
         SHwave.set_estimated_travel_time(tS)
         SHwave.add_plot_station(st_obs0, lst, t1 + tS, ins)
 
-    if surface_waves.enabled:
-        surface_waves.add_plot_station(st_obs0, lst, t1, ins)
+    if generic_wave.enabled:
+        generic_wave.add_plot_station(st_obs0, lst, t1, ins)
 
 print("goodness of fit (gof) per station:")
-df_merged = merge_gof_dfs(Pwave, SHwave, surface_waves)
+df_merged = merge_gof_dfs(Pwave, SHwave, generic_wave)
 
-# Sort the column names alphabetically starting from "surface_waves_E0"
+# Sort the column names alphabetically starting from "generic_wave_E0"
 sorted_columns = sorted(df_merged.columns[df_merged.columns.get_loc("azimuth") + 1 :])
 # Define the desired column order
 desired_columns = ["station", "distance", "azimuth"] + sorted_columns
@@ -451,13 +453,13 @@ if not os.path.exists("plots"):
     os.makedirs("plots")
 
 if Pwave.enabled:
-    fname_P = f"{prefix}_Pwave.{ext}"
+    fname_P = f"{prefix}_P.{ext}"
     Pwave.finalize_and_save_fig(fname_P)
 
 if SHwave.enabled:
-    fname_SH = f"{prefix}_SHwave.{ext}"
+    fname_SH = f"{prefix}_SH.{ext}"
     SHwave.finalize_and_save_fig(fname_SH)
 
-if surface_waves.enabled:
-    fname_surface_waves = f"{prefix}_surface_waves_signal.{ext}"
-    surface_waves.finalize_and_save_fig(fname_surface_waves)
+if generic_wave.enabled:
+    fname_generic_wave = f"{prefix}_generic.{ext}"
+    generic_wave.finalize_and_save_fig(fname_generic_wave)
