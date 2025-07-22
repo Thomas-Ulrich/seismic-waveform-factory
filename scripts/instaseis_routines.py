@@ -479,7 +479,9 @@ def generate_synthetics_instaseis_green_function_mode(
         return lst
 
     total_unique_segments = get_unique_segments_per_tag(source_files)
-    with ProgressBarGreen(total_unique_segments * len(station_coords)) as progress_bar:
+    with ProgressBarGreen(
+        2 * total_unique_segments * len(station_coords)
+    ) as progress_bar:
         for iModel, fname in enumerate(source_files):
             synth = generate_synthetics_instaseis_green(
                 db,
