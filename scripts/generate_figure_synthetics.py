@@ -169,6 +169,7 @@ os.makedirs(path_observations, exist_ok=True)
 
 Pwave_tmin = -config.getfloat("P_WAVE", "t_before")
 Pwave_tmax = config.getfloat("P_WAVE", "t_after")
+Pwave_taper = config.getboolean("P_WAVES", "taper", fallback=True)
 Pwave_filter_fmin = 1.0 / config.getfloat("P_WAVE", "filter_tmax")
 Pwave_filter_fmax = 1.0 / config.getfloat("P_WAVE", "filter_tmin")
 Pwave_enabled = config.getboolean("P_WAVE", "enabled")
@@ -177,6 +178,7 @@ Pwave_ncol_per_component = config.getint("P_WAVE", "ncol_per_component")
 
 SHwave_tmin = -config.getfloat("SH_WAVE", "t_before")
 SHwave_tmax = config.getfloat("SH_WAVE", "t_after")
+SHwave_taper = config.getboolean("SH_WAVES", "taper", fallback=True)
 SHwave_filter_fmin = 1.0 / config.getfloat("SH_WAVE", "filter_tmax")
 SHwave_filter_fmax = 1.0 / config.getfloat("SH_WAVE", "filter_tmin")
 SHwave_enabled = config.getboolean("SH_WAVE", "enabled")
@@ -185,6 +187,7 @@ SHwave_ncol_per_component = config.getint("SH_WAVE", "ncol_per_component")
 
 surface_waves_filter_fmin = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmax")
 surface_waves_filter_fmax = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmin")
+surface_waves_taper = config.getboolean("SURFACE_WAVES", "taper", fallback=True)
 surface_waves_tmin = config.getfloat("SURFACE_WAVES", "tmin", fallback=0.0)
 surface_waves_tmax = config.getfloat("SURFACE_WAVES", "tmax", fallback=None)
 surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
@@ -216,6 +219,7 @@ Pwave = WaveformFigureGenerator(
     "P",
     Pwave_tmin,
     Pwave_tmax,
+    Pwave_taper,
     Pwave_filter_fmin,
     Pwave_filter_fmax,
     Pwave_enabled,
@@ -236,6 +240,7 @@ SHwave = WaveformFigureGenerator(
     "SH",
     SHwave_tmin,
     SHwave_tmax,
+    SHwave_taper,
     SHwave_filter_fmin,
     SHwave_filter_fmax,
     SHwave_enabled,
@@ -256,6 +261,7 @@ surface_waves = WaveformFigureGenerator(
     "surface_waves",
     surface_waves_tmin,
     surface_waves_tmax,
+    surface_waves_taper,
     surface_waves_filter_fmin,
     surface_waves_filter_fmax,
     surface_waves_enabled,

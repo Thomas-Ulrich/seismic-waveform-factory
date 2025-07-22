@@ -7,6 +7,8 @@ from obspy.signal.tf_misfit import pg, eg
 import matplotlib.lines as mlines
 import os
 
+plt.rcParams["font.family"] = "sans"
+
 
 def remove_top_right_axes(ax):
     # remove top right axis
@@ -57,6 +59,7 @@ class WaveformFigureGenerator:
         signal_kind,
         t_before,
         t_after,
+        taper,
         filter_fmin,
         filter_fmax,
         enabled,
@@ -77,6 +80,7 @@ class WaveformFigureGenerator:
         self.signal_kind = signal_kind
         self.t_before = t_before
         self.t_after = t_after
+        self.taper = taper
         self.filter_fmin = filter_fmin
         self.filter_fmax = filter_fmax
         self.enabled = enabled
@@ -235,7 +239,8 @@ class WaveformFigureGenerator:
         st_obs = st_obs.split()
         for myst in [*lst_copy, st_obs]:
             # myst.detrend("linear")
-            myst.taper(max_percentage=0.05, type="hann")
+            if self.taper:
+                myst.taper(max_percentage=0.05, type="hann")
             myst.filter(
                 "bandpass",
                 freqmin=self.filter_fmin,
@@ -459,7 +464,7 @@ class WaveformFigureGenerator:
             direction = {"E": "EW", "N": "NS", "Z": "UD"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
-            self.axarr[-1, -1].set_xlabel("time (s)")
+            self.axarr[-1, -1].set_xlabel("Time (s)")
         elif self.signal_kind == "SH":
             self.axarr[0, 0].set_title("T")
             self.axarr[-1, -1].set_xlabel("time relative to SH arrival (s)")
