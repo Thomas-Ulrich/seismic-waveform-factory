@@ -177,6 +177,10 @@ def get_station_data(
             try:
                 if retry_count == 0:
                     print(f"Getting {level}s for {retry_message}...")
+                kargs = {}
+                if "geofon" not in client_or_clientname.base_url:
+                    kargs["includeavailability"] = True
+
                 inventory = client_or_clientname.get_stations(
                     network=network,
                     station=station,
@@ -184,7 +188,7 @@ def get_station_data(
                     level=level,
                     starttime=t1,
                     endtime=t2,
-                    includeavailability=True,
+                    **kargs,
                 )
 
                 inv.extend(inventory)
