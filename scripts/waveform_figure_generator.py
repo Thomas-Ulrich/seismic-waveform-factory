@@ -221,8 +221,11 @@ class WaveformFigureGenerator:
             if stmax <= 0:
                 stmax = 1.0
             scaling = 1 / stmax if stmax != 0.0 else 1.0
+        elif self.signal_kind in ["P", "SH"]:
+            # micro meters (/s if velocity)
+            scaling = 1e6
         else:
-            scaling = 1.0
+            scaling = 1
         scaling *= self.scaling
         return scaling, annot
 
