@@ -393,7 +393,7 @@ class WaveformFigureGenerator:
         end_time_interp = min(reftime + self.t_after, end_osTrace)
 
         # Interpolation frequency
-        f0 = self.filter_fmax * 10.0
+        f0 = self.filter_fmax * 4.0
         npts_interp = int(np.floor((end_time_interp - start_time_interp) * f0)) + 1
         if npts_interp < 2:
             return None, None, None, None
