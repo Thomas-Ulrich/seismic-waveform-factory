@@ -372,6 +372,52 @@ class WaveformFigureGenerator:
 
         self.gof_df.loc[len(self.gof_df)] = temp_dic
 
+    def _prepare_traces(self, st, st_obs, comp, reftime):
+        """
+        Common preprocessing: select, trim, and interpolate traces for one component.
+        Returns (strace, otrace, f0, shiftmax). If preparation fails, returns (None, None, None, None).
+        """
+        straces = st.select(component=comp)
+        otraces = st_obs.select(component=comp)
+
+        if not straces or not otraces:
+            return None, None, None, None
+
+        strace = straces[0].copy()
+        otrace = otraces[0].copy()
+
+        # Find common time window
+        start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
+        end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
+        start_time_interp = max(reftime + self.t_before, start_osTrace)
+        end_time_interp = min(reftime + self.t_after, end_osTrace)
+
+        # Interpolation frequency
+        f0 = self.filter_fmax * 10.0
+        npts_interp = int(np.floor((end_time_interp - start_time_interp) * f0)) + 1
+        if npts_interp < 2:
+            return None, None, None, None
+
+        # Interpolate both traces
+        strace.interpolate(
+            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
+        )
+        otrace = otrace.split()
+        otrace.interpolate(
+            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
+        )
+        otrace = otrace.merge()[0]
+
+        # Max allowed shift
+        shift_sec_max = (
+            100.0
+            if self.signal_kind == "generic"
+            else max(2.5, 0.025 * self.estimated_travel_time)
+        )
+        shiftmax = int(shift_sec_max / f0)
+
+        return strace, otrace, f0, shiftmax
+
     def compute_shift_correlation(self, st, st_obs, components, reftime):
         shift = 0
         for comp in self.components:
@@ -382,82 +428,24 @@ class WaveformFigureGenerator:
         if not self.shift_match_correlation:
             return 0
 
-        strace = st.select(component=comp)[0].copy()
-
-        otraces = st_obs.select(component=comp)
-        if not otraces:
+        strace, otrace, f0, shiftmax = self._prepare_traces(st, st_obs, comp, reftime)
+        if strace is None:
             return 0
-        else:
-            otrace = otraces[0].copy()
 
-        start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
-        end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
-        start_time_interp = max(reftime + self.t_before, start_osTrace)
-        end_time_interp = min(reftime + self.t_after, end_osTrace)
-        f0 = self.filter_fmax * 10.0
-        npts_interp = (
-            np.floor((end_time_interp - start_time_interp) * f0).astype(int) + 1
-        )
-        if npts_interp < 2:
-            return 0
-        strace.interpolate(
-            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
-        )
-        otrace = otrace.split()
-        otrace.interpolate(
-            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
-        )
-        otrace = otrace.merge()[0]
-
-        shift_sec_max = (
-            100.0
-            if self.signal_kind == "generic"
-            else max(2.5, 0.025 * self.estimated_travel_time)
-        )
-        shiftmax = int(shift_sec_max / f0)
         cc = correlate(strace, otrace, shift=shiftmax)
         shift, gof = xcorr_max(cc, abs_max=False)
         return shift / f0
 
     def compute_misfit(self, st, st_obs, comp, reftime):
-        strace = st.select(component=comp)[0].copy()
-
-        otraces = st_obs.select(component=comp)
-        if not otraces:
+        strace, otrace, f0, shiftmax = self._prepare_traces(st, st_obs, comp, reftime)
+        if strace is None:
+            # Build dummy otrace if missing
             otrace = st_obs[0].copy()
             otrace.data *= 0
             return 0, otrace.data[0] * self.scaling
-        else:
-            otrace = otraces[0].copy()
-
-        start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
-        end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
-        start_time_interp = max(reftime + self.t_before, start_osTrace)
-        end_time_interp = min(reftime + self.t_after, end_osTrace)
-        f0 = self.filter_fmax * 10.0
-        npts_interp = (
-            np.floor((end_time_interp - start_time_interp) * f0).astype(int) + 1
-        )
-        if npts_interp < 2:
-            return 0, otrace.data[0] * self.scaling
-        strace.interpolate(
-            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
-        )
-        otrace = otrace.split()
-        otrace.interpolate(
-            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
-        )
-        otrace = otrace.merge()[0]
 
         def nanrms(x, axis=None):
             return np.sqrt(np.nanmean(x**2, axis=axis))
-
-        shift_sec_max = (
-            100.0
-            if self.signal_kind == "generic"
-            else max(2.5, 0.025 * self.estimated_travel_time)
-        )
-        shiftmax = int(shift_sec_max / f0)
 
         if self.kind_misfit == "normalized_rms":
             gof = nanrms(strace.data - otrace.data) / nanrms(otrace.data)
