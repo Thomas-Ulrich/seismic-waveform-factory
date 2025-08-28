@@ -375,7 +375,8 @@ class WaveformFigureGenerator:
     def _prepare_traces(self, st, st_obs, comp, reftime):
         """
         Common preprocessing: select, trim, and interpolate traces for one component.
-        Returns (strace, otrace, f0, shiftmax). If preparation fails, returns (None, None, None, None).
+        Returns (strace, otrace, f0, shiftmax).
+        If preparation fails, returns (None, None, None, None).
         """
         straces = st.select(component=comp)
         otraces = st_obs.select(component=comp)
