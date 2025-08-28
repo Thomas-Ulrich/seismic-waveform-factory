@@ -154,7 +154,7 @@ kind_misfit = config.get("GENERAL", "Misfit", fallback="min_shifted_normalized_r
 valid_misfits = {
     "min_shifted_normalized_rms",
     "normalized_rms",
-    "cross_correlation",
+    "cross-correlation",
     "time-frequency",
 }
 if kind_misfit not in valid_misfits:
@@ -177,7 +177,8 @@ def get_wave_config(config, section_names):
             break
     if not section:
         raise ValueError(f"none of {section_names} found in config")
-
+    t_before = 0
+    t_after = None
     if config.has_option(section, "t_before"):
         t_before = -config.getfloat(section, "t_before")
         t_after = config.getfloat(section, "t_after")

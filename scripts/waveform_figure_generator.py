@@ -241,7 +241,8 @@ class WaveformFigureGenerator:
                 st.rotate(method="NE->RT")
         st_obs = st_obs.split()
         for myst in [*lst_copy, st_obs]:
-            # myst.detrend("linear")
+            myst.detrend("demean")
+            myst.detrend("linear")
             if self.taper:
                 myst.taper(max_percentage=0.05, type="hann")
             myst.filter(
@@ -427,9 +428,9 @@ class WaveformFigureGenerator:
                     # best_shift = shift
             # transform misfit to goodness of fit
             gof = np.exp(-gof)
-        elif self.kind_misfit == "cross-corelation":
+        elif self.kind_misfit == "cross-correlation":
             cc = correlate(strace, otrace, shift=shiftmax)
-            shift, gof = xcorr_max(cc)
+            shift, gof = xcorr_max(cc, abs_max=False)
         elif self.kind_misfit == "time-frequency":
             gof_envolope = eg(
                 strace.data,
