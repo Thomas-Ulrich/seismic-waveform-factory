@@ -121,6 +121,9 @@ hypo_lon = config.getfloat("GENERAL", "hypo_lon")
 hypo_lat = config.getfloat("GENERAL", "hypo_lat")
 scaling = config.getfloat("GENERAL", "scaling", fallback=1.0)
 normalize = config.getboolean("GENERAL", "normalize", fallback=False)
+shift_match_correlation = config.getboolean(
+    "GENERAL", "shift_match_correlation", fallback=False
+)
 
 hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
 station_codes_list = config.get("GENERAL", "stations")
@@ -247,6 +250,7 @@ Pwave = WaveformFigureGenerator(
     line_widths,
     scaling,
     normalize,
+    shift_match_correlation,
     relative_offset,
     annotations,
     global_legend_labels,
@@ -262,6 +266,7 @@ SHwave = WaveformFigureGenerator(
     line_widths,
     scaling,
     normalize,
+    shift_match_correlation,
     relative_offset,
     annotations,
     global_legend_labels,
@@ -276,6 +281,7 @@ generic_wave = WaveformFigureGenerator(
     line_widths,
     scaling,
     normalize,
+    shift_match_correlation,
     relative_offset,
     annotations,
     global_legend_labels,

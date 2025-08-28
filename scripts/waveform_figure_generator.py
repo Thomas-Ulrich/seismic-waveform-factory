@@ -64,6 +64,7 @@ class WaveformFigureGenerator:
         line_widths,
         scaling,
         normalize,
+        shift_match_correlation,
         relative_offset,
         annotations,
         global_legend_labels,
@@ -87,6 +88,7 @@ class WaveformFigureGenerator:
         self.ncol_per_component = ncol_per_component
         self.ncomp = len(self.components)
         self.normalize = normalize
+        self.shift_match_correlation = shift_match_correlation
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
         assert kind_misfit in [
@@ -282,10 +284,13 @@ class WaveformFigureGenerator:
             for ist, st in enumerate(lst_copy):
                 strace = st.select(component=comp)[0]
                 scaling, annot = self.compute_scaling(strace, reftime)
+                shift_s = self.compute_shift_correlation(
+                    st, st_obs, self.components, reftime
+                )
                 vmax_annot.append(annot)
 
                 self.axarr[ins, j0].plot(
-                    strace.times(reftime=reftime),
+                    strace.times(reftime=reftime + shift_s),
                     scaling * strace.data + (nst - ist - 1) * offset,
                     self.colors[ist],
                     linewidth=self.line_widths[ist],
@@ -367,6 +372,53 @@ class WaveformFigureGenerator:
 
         self.gof_df.loc[len(self.gof_df)] = temp_dic
 
+    def compute_shift_correlation(self, st, st_obs, components, reftime):
+        shift = 0
+        for comp in self.components:
+            shift += self.compute_shift_correlation_one_comp(st, st_obs, comp, reftime)
+        return shift / len(self.components)
+
+    def compute_shift_correlation_one_comp(self, st, st_obs, comp, reftime):
+        if not self.shift_match_correlation:
+            return 0
+
+        strace = st.select(component=comp)[0].copy()
+
+        otraces = st_obs.select(component=comp)
+        if not otraces:
+            return 0
+        else:
+            otrace = otraces[0].copy()
+
+        start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
+        end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
+        start_time_interp = max(reftime + self.t_before, start_osTrace)
+        end_time_interp = min(reftime + self.t_after, end_osTrace)
+        f0 = self.filter_fmax * 10.0
+        npts_interp = (
+            np.floor((end_time_interp - start_time_interp) * f0).astype(int) + 1
+        )
+        if npts_interp < 2:
+            return 0
+        strace.interpolate(
+            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
+        )
+        otrace = otrace.split()
+        otrace.interpolate(
+            sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
+        )
+        otrace = otrace.merge()[0]
+
+        shift_sec_max = (
+            100.0
+            if self.signal_kind == "generic"
+            else max(2.5, 0.025 * self.estimated_travel_time)
+        )
+        shiftmax = int(shift_sec_max / f0)
+        cc = correlate(strace, otrace, shift=shiftmax)
+        shift, gof = xcorr_max(cc, abs_max=False)
+        return shift / f0
+
     def compute_misfit(self, st, st_obs, comp, reftime):
         strace = st.select(component=comp)[0].copy()
 
@@ -405,7 +457,7 @@ class WaveformFigureGenerator:
             if self.signal_kind == "generic"
             else max(2.5, 0.025 * self.estimated_travel_time)
         )
-        shiftmax = int(shift_sec_max * f0)
+        shiftmax = int(shift_sec_max / f0)
 
         if self.kind_misfit == "normalized_rms":
             gof = nanrms(strace.data - otrace.data) / nanrms(otrace.data)
