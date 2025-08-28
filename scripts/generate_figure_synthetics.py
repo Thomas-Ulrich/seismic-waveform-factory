@@ -442,9 +442,9 @@ source_files_inc_seissol = [seissol_outputs[k] for k in range(n_seissol_model)] 
     for k in range(n_seissol_model, n_syn_model)
 ]
 
-pd.set_option('display.max_colwidth', None)
+pd.set_option("display.max_colwidth", None)
 df_station_average["source_file"] = [source_files_inc_seissol[k] for k in file_id]
-print(df_station_average.sort_values(by='gofa', ascending=False))
+print(df_station_average.sort_values(by="gofa", ascending=False))
 
 waveform_type = "teleseismic" if "instaseis" in software else "regional"
 fname = f"gof_{waveform_type}_waveforms_average.pkl"
