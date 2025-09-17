@@ -44,14 +44,14 @@ fig = plt.figure(figsize=(4.5, 4.5 * 8.0 / 16), dpi=80)
 ax = fig.add_subplot(111)
 
 h5f = h5py.File(args.filename, "r")
-STF = h5f["NormalizedMomentRate"][:, :]
+STF = h5f["normalized_moment_rates"][:, :]
 print((STF.shape))
 dt = h5f["dt"][0]
 nsources, ndt = STF.shape
 
 if not args.normalized:
-    aMomentTensor = h5f["MomentTensor"][:, :]
-    Mom = np.linalg.norm(aMomentTensor, axis=1)
+    moment_tensors = h5f["moment_tensors"][:, :]
+    Mom = np.linalg.norm(moment_tensors, axis=1)
     c = np.diag(Mom)
     STF = np.dot(c, STF)
 h5f.close()

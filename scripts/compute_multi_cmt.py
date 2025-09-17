@@ -4,6 +4,7 @@ import cmt
 import argparse
 from faultoutput import FaultOutput
 import os
+import json
 
 parser = argparse.ArgumentParser(
     description=(
@@ -56,22 +57,21 @@ for sp in [spatial, temporal]:
     )
 
     sp.add_argument(
-        "muDescription",
-        type=int,
-        help=("0: constant, 1: 1D velocity, 2: 3D NetCDF, " "3: Sumatra specific"),
-    )
-
-    sp.add_argument(
-        "muValue",
+        "mu",
         help=(
-            "Value of rigidity (mu) or file describing mu. "
-            "1: 2 columns ASCII (z, mu), 2: 3D NetCDF"
+            "a float value, a 2 columns ASCII (z, mu) text file "
+            "or a yaml file to be read with easi"
         ),
     )
 
     sp.add_argument(
+        "--potency",
+        action="store_true",
+        help=("compute potency instead of seismic moment (basically use G=1)"),
+    )
+
+    sp.add_argument(
         "--STFfromSR",
-        nargs=1,
         metavar=("xdmf SR File"),
         help=(
             "Use SR to compute Source Time Function " "(high sampling rate required)"
@@ -80,7 +80,6 @@ for sp in [spatial, temporal]:
 
     sp.add_argument(
         "--proj",
-        nargs=1,
         metavar=("projname"),
         help=(
             "Transform to the coordinate reference system WGS 84 (lat, lon) "
@@ -90,26 +89,23 @@ for sp in [spatial, temporal]:
 
     sp.add_argument(
         "--DH",
-        nargs=1,
-        default=([20]),
+        default=20,
         type=float,
         help="Max horizontal distance between point sources, in km",
     )
 
     sp.add_argument(
         "--NZ",
-        nargs=1,
         metavar=("nz"),
-        default=([2]),
+        default=2,
         type=int,
         help="Number of point sources along z",
     )
 
     sp.add_argument(
         "--slip_threshold",
-        nargs=1,
         metavar=("slip_threshold"),
-        default=([0.1]),
+        default=0.1,
         type=float,
         help=(
             "Slip threshold used for excluding low slip areas when slicing the fault"
@@ -127,7 +123,6 @@ for sp in [spatial, temporal]:
 
     sp.add_argument(
         "--ndt",
-        nargs=1,
         metavar=("ndt"),
         type=int,
         help="Use a subset of time frames",
@@ -135,11 +130,22 @@ for sp in [spatial, temporal]:
 
     sp.add_argument(
         "--invertSld",
-        dest="invertSld",
         action="store_true",
         help=(
             "Invert Sld (if the normal is consistently wrongly defined "
             "in SeisSol output)"
+        ),
+    )
+
+    sp.add_argument(
+        "--use_geometric_center",
+        action="store_true",
+        help=(
+            "Use the geometric center (area-weighted centroid) of the selected fault"
+            " face instead of the moment-weighted center to define the point source"
+            " location. This makes the location independent of the moment distribution"
+            ", which is useful when reusing Green's functions across different rupture"
+            " models."
         ),
     )
 
@@ -149,17 +155,24 @@ if args.proj:
     from pyproj import Transformer
 
     # epsg:4326 is the coordinate reference system WGS 84 (lat, lon)
-    transformer = Transformer.from_crs(args.proj[0], "epsg:4326", always_xy=True)
+    transformer = Transformer.from_crs(args.proj, "epsg:4326", always_xy=True)
 
 fo = FaultOutput(args.filename, args.ndt)
 fo.read_final_slip()
 fo.compute_strike_dip(args.refVector)
 fo.compute_rake(args.invertSld)
 fo.compute_barycenter_coords()
-fo.compute_Garea(cmt.compute_rigidity(args.muDescription, args.muValue, fo.xyzc))
+fo.compute_face_area()
+
+if args.potency:
+    fo.G = 1.0
+else:
+    fo.evaluate_G(args.mu)
+
+fo.Garea = fo.G * fo.face_area
 
 if args.STFfromSR:
-    fo_SR = FaultOutput(args.STFfromSR[0])
+    fo_SR = FaultOutput(args.STFfromSR)
     fo_SR.compute_barycenter_coords()
     fo.compute_face_moment_rate_from_slip_rate(fo_SR)
 else:
@@ -189,7 +202,7 @@ for fault_tag in fo.unique_fault_tags:
             hslices = [t0, *t_abs_slices, tmax]
             sprint = f"user defined time for sub_events: {hslices}"
         else:
-            hslices = np.linspace(t0, tmax, (args.DH[0] + 1))
+            hslices = np.linspace(t0, tmax, (args.DH + 1))
             sprint = f"{len(hslices) - 1} slices along rupture time ({t0} - {tmax}s)"
         # hslices[-1] = 1e10
         h_or_RT = fo.get_rupture_time()
@@ -207,27 +220,28 @@ for fault_tag in fo.unique_fault_tags:
 
         h_or_RT = args.vH[0] * fo.xyzc[selected, 0] + args.vH[1] * fo.xyzc[selected, 1]
         hslices = cmt.compute_slices_array_enforcing_dx(
-            h_or_RT, fo.slip[selected], args.DH[0], args.slip_threshold[0]
+            h_or_RT, fo.slip[selected], args.DH, args.slip_threshold
         )
         sprint = f"{len(hslices) - 1} slices along horizontal direction :\
          ({args.vH[0]},{args.vH[1]})"
 
-    print(f"{sprint}, {args.NZ[0]} along z")
+    print(f"{sprint}, {args.NZ} along z")
     zcenters0 = fo.xyzc[selected, 2]
     zslices = cmt.compute_slices_array(
-        zcenters0, fo.slip[selected], args.NZ[0], args.slip_threshold[0]
+        zcenters0, fo.slip[selected], args.NZ, args.slip_threshold
     )
 
-    nsources = (len(hslices) - 1) * args.NZ[0]
+    nsources = (len(hslices) - 1) * args.NZ
     aNormMRF = np.zeros((nsources, fo.ndt))
     aMomentTensor = np.zeros((nsources, 6))
     axyz = np.zeros((nsources, 3))
+    segment_indices = np.zeros((nsources, 2), dtype=int)
 
     M0_segment = 0
     isrc_segment = 0
     for i in range(len(hslices) - 1):
         h_or_RT1, h_or_RT2 = hslices[i], hslices[i + 1]
-        for j in range(args.NZ[0]):
+        for j in range(args.NZ):
             z1, z2 = zslices[j], zslices[j + 1]
 
             idxys = np.where((h_or_RT >= h_or_RT1) & (h_or_RT < h_or_RT2))
@@ -239,7 +253,9 @@ for fault_tag in fo.unique_fault_tags:
                 NormMRF,
                 MomentTensor,
                 xyz,
-            ) = fo.compute_equivalent_point_source_subfault(selected[ids])
+            ) = fo.compute_equivalent_point_source_subfault(
+                selected[ids], use_geometric_center=args.use_geometric_center
+            )
             if not M0:
                 continue
 
@@ -257,32 +273,48 @@ for fault_tag in fo.unique_fault_tags:
                 MomentTensor,
                 xyz,
             )
+            segment_indices[isrc_segment, :] = i, j
             isrc_segment = isrc_segment + 1
 
     M0_eq += M0_segment
     nsrc_eq += isrc_segment
-    Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07
-    print(
-        f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm)"
-        f", {isrc_segment} sources"
-    )
+    if args.potency:
+        print(
+            f"Potency(segment_{fault_tag})={M0_segment:.2e} m3"
+            f", {isrc_segment} sources"
+        )
+    else:
+        Mw = 2.0 / 3.0 * np.log10(M0_segment) - 6.07 if M0_segment else 0.0
+        print(
+            f"Mw(segment_{fault_tag})={Mw:.2f} ({M0_segment:.2e} Nm)"
+            f", {isrc_segment} sources"
+        )
 
     aMomentTensor = cmt.NED2RTP(aMomentTensor[0:isrc_segment, :])
     aNormMRF = aNormMRF[0:isrc_segment, :]
     axyz = axyz[0:isrc_segment, :]
+    segment_indices = segment_indices[0:isrc_segment, :]
 
     point_sources[fault_tag] = {
         "moment_tensors": aMomentTensor,
         "moment_rate_functions": aNormMRF,
         "locations": axyz,
+        "segment_indices": segment_indices,
     }
+
+json_str = json.dumps(vars(args))
 
 prefix = os.path.basename(args.filename.split("-fault")[0])
 if args.command == "temporal":
-    fname = f"PointSourceFile_{prefix}_nt{args.DH[0]}_nz{args.NZ[0]}.h5"
+    fname = f"PointSourceFile_{prefix}_nt{args.DH}_nz{args.NZ}.h5"
 else:
-    fname = f"PointSourceFile_{prefix}_dx{args.DH[0]}_nz{args.NZ[0]}.h5"
-cmt.write_point_source_file(fname, point_sources, fo.dt, args.proj)
+    fname = f"PointSourceFile_{prefix}_dx{args.DH}_nz{args.NZ}.h5"
+cmt.write_point_source_file(
+    fname, point_sources, fo.dt, args.proj, args.potency, json_str
+)
 
-Mw = 2.0 / 3.0 * np.log10(M0_eq) - 6.07
-print(f"Mw(earthquake)={Mw:.2f} ({M0_eq:.2e} Nm), {nsrc_eq} sources")
+if args.potency:
+    print(f"Potency(earthquake)= {M0_eq:.2e} m3, {nsrc_eq} sources")
+else:
+    Mw = 2.0 / 3.0 * np.log10(M0_eq) - 6.07
+    print(f"Mw(earthquake)={Mw:.2f} ({M0_eq:.2e} Nm), {nsrc_eq} sources")

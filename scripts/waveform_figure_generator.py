@@ -7,6 +7,8 @@ from obspy.signal.tf_misfit import pg, eg
 import matplotlib.lines as mlines
 import os
 
+plt.rcParams["font.family"] = "sans"
+
 
 def remove_top_right_axes(ax):
     # remove top right axis
@@ -55,40 +57,44 @@ class WaveformFigureGenerator:
     def __init__(
         self,
         signal_kind,
-        t_before,
-        t_after,
-        filter_fmin,
-        filter_fmax,
-        enabled,
-        ncol_per_component,
         nstations,
-        components,
         n_kinematic_models,
         kind_misfit,
         colors,
         line_widths,
         scaling,
         normalize,
+        shift_match_correlation,
         relative_offset,
         annotations,
         global_legend_labels,
+        t_before,
+        t_after,
+        taper,
+        filter_fmin,
+        filter_fmax,
+        enabled,
+        ncol_per_component,
+        components,
     ):
         self.components = components
         self.signal_kind = signal_kind
         self.t_before = t_before
         self.t_after = t_after
+        self.taper = taper
         self.filter_fmin = filter_fmin
         self.filter_fmax = filter_fmax
         self.enabled = enabled
         self.ncol_per_component = ncol_per_component
         self.ncomp = len(self.components)
         self.normalize = normalize
+        self.shift_match_correlation = shift_match_correlation
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
         assert kind_misfit in [
             "cross-correlation",
-            "rRMS",
-            "rRMS_shifted",
+            "normalized_rms",
+            "min_shifted_normalized_rms",
             "time-frequency",
         ]
         self.kind_misfit = kind_misfit
@@ -99,6 +105,7 @@ class WaveformFigureGenerator:
         self.relative_offset = relative_offset
         self.annotations = annotations
         self.global_legend_labels = global_legend_labels
+        self.estimated_travel_time = 0.0
 
     def init_gof_pandas_df(self):
         columns = ["station", "distance", "azimuth"]
@@ -110,16 +117,19 @@ class WaveformFigureGenerator:
             columns += [f"{self.signal_kind}_{comp}{i}" for comp in self.components]
         self.gof_df = pd.DataFrame(columns=columns)
 
+    def set_estimated_travel_time(self, travel_time):
+        self.estimated_travel_time = travel_time
+
     def init_several_stations_figure(self, nstations):
         nrow = int(np.ceil(nstations / self.ncol_per_component))
         ncol = self.ncol_per_component * self.ncomp
         # for comparing signals on the same figure
         if self.signal_kind in ["P", "SH"]:
             height_one_plot = 1.7
-            surface_waves_signa_plot = False
+            generic_plot = False
         else:
             height_one_plot = 1.5
-            surface_waves_signa_plot = True
+            generic_plot = True
         fig, axarr = plt.subplots(
             nrow,
             ncol,
@@ -134,13 +144,13 @@ class WaveformFigureGenerator:
                 axi = axarr[i, j]
                 if self.normalize:
                     axi.set_yticks([])
-                if j > 0 and surface_waves_signa_plot:
+                if j > 0 and generic_plot:
                     axi.set_yticks([])
                     axi.spines["left"].set_visible(False)
                     axi.get_shared_y_axes().joined(axi, axarr[i, 0])
                 remove_top_right_axes(axi)
                 axi.tick_params(axis="x", zorder=3)
-                if i < nrow - 1 and surface_waves_signa_plot:
+                if i < nrow - 1 and generic_plot:
                     axi.spines["bottom"].set_visible(False)
                     axi.set_xticks([])
                 if j * nrow + i >= self.ncomp * nstations:
@@ -213,8 +223,11 @@ class WaveformFigureGenerator:
             if stmax <= 0:
                 stmax = 1.0
             scaling = 1 / stmax if stmax != 0.0 else 1.0
+        elif self.signal_kind in ["P", "SH"]:
+            # micro meters (/s if velocity)
+            scaling = 1e6
         else:
-            scaling = 1.0
+            scaling = 1
         scaling *= self.scaling
         return scaling, annot
 
@@ -230,8 +243,10 @@ class WaveformFigureGenerator:
                 st.rotate(method="NE->RT")
         st_obs = st_obs.split()
         for myst in [*lst_copy, st_obs]:
-            # myst.detrend("linear")
-            myst.taper(max_percentage=0.05, type="hann")
+            myst.detrend("demean")
+            myst.detrend("linear")
+            if self.taper:
+                myst.taper(max_percentage=0.05, type="hann")
             myst.filter(
                 "bandpass",
                 freqmin=self.filter_fmin,
@@ -255,7 +270,7 @@ class WaveformFigureGenerator:
             return j + ista // nrows
 
         ylabel = f"{network}.{station}"
-        if self.signal_kind == "surface_waves":
+        if self.signal_kind == "generic":
             self.axarr[ins, 0].set_ylabel(ylabel)
 
         for j, comp in enumerate(self.components):
@@ -269,10 +284,13 @@ class WaveformFigureGenerator:
             for ist, st in enumerate(lst_copy):
                 strace = st.select(component=comp)[0]
                 scaling, annot = self.compute_scaling(strace, reftime)
+                shift_s = self.compute_shift_correlation(
+                    st, st_obs, self.components, reftime
+                )
                 vmax_annot.append(annot)
 
                 self.axarr[ins, j0].plot(
-                    strace.times(reftime=reftime),
+                    strace.times(reftime=reftime + shift_s),
                     scaling * strace.data + (nst - ist - 1) * offset,
                     self.colors[ist],
                     linewidth=self.line_widths[ist],
@@ -354,27 +372,34 @@ class WaveformFigureGenerator:
 
         self.gof_df.loc[len(self.gof_df)] = temp_dic
 
-    def compute_misfit(self, st, st_obs, comp, reftime):
-        strace = st.select(component=comp)[0].copy()
-
+    def _prepare_traces(self, st, st_obs, comp, reftime):
+        """
+        Common preprocessing: select, trim, and interpolate traces for one component.
+        Returns (strace, otrace, f0, shiftmax).
+        If preparation fails, returns (None, None, None, None).
+        """
+        straces = st.select(component=comp)
         otraces = st_obs.select(component=comp)
-        if not otraces:
-            otrace = st_obs[0].copy()
-            otrace.data *= 0
-            return 0, otrace.data[0] * self.scaling
-        else:
-            otrace = otraces[0].copy()
 
+        if not straces or not otraces:
+            return None, None, None, None
+
+        strace = straces[0].copy()
+        otrace = otraces[0].copy()
+
+        # Find common time window
         start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
         end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
         start_time_interp = max(reftime + self.t_before, start_osTrace)
         end_time_interp = min(reftime + self.t_after, end_osTrace)
-        f0 = self.filter_fmax * 10.0
-        npts_interp = (
-            np.floor((end_time_interp - start_time_interp) * f0).astype(int) + 1
-        )
+
+        # Interpolation frequency
+        f0 = self.filter_fmax * 4.0
+        npts_interp = int(np.floor((end_time_interp - start_time_interp) * f0)) + 1
         if npts_interp < 2:
-            return 0, otrace.data[0] * self.scaling
+            return None, None, None, None
+
+        # Interpolate both traces
         strace.interpolate(
             sampling_rate=f0, starttime=start_time_interp, npts=npts_interp
         )
@@ -384,32 +409,69 @@ class WaveformFigureGenerator:
         )
         otrace = otrace.merge()[0]
 
+        # Max allowed shift
+        shift_sec_max = (
+            100.0
+            if self.signal_kind == "generic"
+            else max(2.5, 0.025 * self.estimated_travel_time)
+        )
+        shiftmax = int(shift_sec_max / f0)
+
+        return strace, otrace, f0, shiftmax
+
+    def compute_shift_correlation(self, st, st_obs, components, reftime):
+        shift = 0
+        for comp in self.components:
+            shift += self.compute_shift_correlation_one_comp(st, st_obs, comp, reftime)
+        return shift / len(self.components)
+
+    def compute_shift_correlation_one_comp(self, st, st_obs, comp, reftime):
+        if not self.shift_match_correlation:
+            return 0
+
+        strace, otrace, f0, shiftmax = self._prepare_traces(st, st_obs, comp, reftime)
+        if strace is None:
+            return 0
+
+        cc = correlate(strace, otrace, shift=shiftmax)
+        shift, gof = xcorr_max(cc, abs_max=False)
+        return shift / f0
+
+    def compute_misfit(self, st, st_obs, comp, reftime):
+        strace, otrace, f0, shiftmax = self._prepare_traces(st, st_obs, comp, reftime)
+        if strace is None:
+            # Build dummy otrace if missing
+            otrace = st_obs[0].copy()
+            otrace.data *= 0
+            return 0, otrace.data[0] * self.scaling
+
         def nanrms(x, axis=None):
             return np.sqrt(np.nanmean(x**2, axis=axis))
 
-        shift_sec_max = 100.0 if self.signal_kind == "surface_waves" else 5.0
-        shiftmax = int(shift_sec_max * f0)
-
-        if self.kind_misfit == "rRMS":
-            # well this is rather a misfit
+        if self.kind_misfit == "normalized_rms":
             gof = nanrms(strace.data - otrace.data) / nanrms(otrace.data)
-        elif self.kind_misfit == "rRMS_shifted":
+            # transform misfit to goodness of fit
+            gof = np.exp(-gof)
+        elif self.kind_misfit == "min_shifted_normalized_rms":
             gof = np.inf
+            # best_shift = 0
             for shift in range(-shiftmax, shiftmax + 1):
-                if shift > 0:
-                    gof1 = nanrms(strace.data[shift:] - otrace.data[:-shift]) / nanrms(
-                        otrace.data[:-shift]
-                    )
-                elif shift < 0:
-                    gof1 = nanrms(otrace.data[shift:] - strace.data[:-shift]) / nanrms(
-                        otrace.data[shift:]
-                    )
+                if shift >= 0:
+                    s_data = strace.data[shift:]
+                    o_data = otrace.data[:-shift] if shift > 0 else otrace.data
                 else:
-                    gof1 = nanrms(strace.data - otrace.data) / nanrms(otrace.data)
-                gof = min(gof, gof1)
-        elif self.kind_misfit == "cross-corelation":
+                    shift_abs = abs(shift)
+                    s_data = strace.data[:-shift_abs]
+                    o_data = otrace.data[shift_abs:]
+                current_gof = nanrms(s_data - o_data) / nanrms(o_data)
+                if current_gof < gof:
+                    gof = current_gof
+                    # best_shift = shift
+            # transform misfit to goodness of fit
+            gof = np.exp(-gof)
+        elif self.kind_misfit == "cross-correlation":
             cc = correlate(strace, otrace, shift=shiftmax)
-            shift, gof = xcorr_max(cc)
+            shift, gof = xcorr_max(cc, abs_max=False)
         elif self.kind_misfit == "time-frequency":
             gof_envolope = eg(
                 strace.data,
@@ -443,11 +505,11 @@ class WaveformFigureGenerator:
     def finalize_and_save_fig(self, fname):
         if self.global_legend_labels:
             self.add_global_legend()
-        if self.signal_kind == "surface_waves":
+        if self.signal_kind == "generic":
             direction = {"E": "EW", "N": "NS", "Z": "UD"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
-            self.axarr[-1, -1].set_xlabel("time (s)")
+            self.axarr[-1, -1].set_xlabel("Time (s)")
         elif self.signal_kind == "SH":
             self.axarr[0, 0].set_title("T")
             self.axarr[-1, -1].set_xlabel("time relative to SH arrival (s)")

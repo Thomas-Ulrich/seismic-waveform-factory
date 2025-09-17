@@ -94,6 +94,9 @@ if "instaseis" in software:
     from instaseis_routines import generate_synthetics_instaseis
 
     db_name = config.get("GENERAL", "db")
+    instaseis_modes = config.get("GENERAL", "instaseis_mode", fallback="classical")
+    instaseis_modes = [item.strip() for item in instaseis_modes.split(",")]
+
     prefix = f"{prefix}_instaseis"
 
 if ("axitra" in software) or ("pyprop8" in software):
@@ -118,6 +121,9 @@ hypo_lon = config.getfloat("GENERAL", "hypo_lon")
 hypo_lat = config.getfloat("GENERAL", "hypo_lat")
 scaling = config.getfloat("GENERAL", "scaling", fallback=1.0)
 normalize = config.getboolean("GENERAL", "normalize", fallback=False)
+shift_match_correlation = config.getboolean(
+    "GENERAL", "shift_match_correlation", fallback=False
+)
 
 hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
 station_codes_list = config.get("GENERAL", "stations")
@@ -146,34 +152,72 @@ line_widths = extend_if_necessary(line_widths, n_syn_model, "line_widths")
 
 
 path_observations = config.get("GENERAL", "path_observations")
-kind_misfit = config.get("GENERAL", "Misfit", fallback="rRMS")
+kind_misfit = config.get("GENERAL", "Misfit", fallback="min_shifted_normalized_rms")
+
+valid_misfits = {
+    "min_shifted_normalized_rms",
+    "normalized_rms",
+    "cross-correlation",
+    "time-frequency",
+}
+if kind_misfit not in valid_misfits:
+    raise ValueError(
+        f"Invalid misfit kind: {kind_misfit}. Must be one of {valid_misfits}"
+    )
+
 
 plt.rcParams.update({"font.size": font_size})
 
 os.makedirs(path_observations, exist_ok=True)
 
-Pwave_tmin = -config.getfloat("P_WAVE", "t_before")
-Pwave_tmax = config.getfloat("P_WAVE", "t_after")
-Pwave_filter_fmin = 1.0 / config.getfloat("P_WAVE", "filter_tmax")
-Pwave_filter_fmax = 1.0 / config.getfloat("P_WAVE", "filter_tmin")
-Pwave_enabled = config.getboolean("P_WAVE", "enabled")
-Pwave_ncol_per_component = config.getint("P_WAVE", "ncol_per_component")
+
+def get_wave_config(config, section_names):
+    # determine section name from all possibilities
+    section = None
+    for section_name in section_names:
+        if config.has_section(section_name):
+            section = section_name
+            break
+    if not section:
+        raise ValueError(f"none of {section_names} found in config")
+    t_before = 0
+    t_after = None
+    if config.has_option(section, "t_before"):
+        t_before = -config.getfloat(section, "t_before")
+        t_after = config.getfloat(section, "t_after")
+    elif config.has_option(section, "tmax"):
+        t_before = config.getfloat(section, "tmin", fallback=0.0)
+        t_after = config.getfloat(section, "tmax", fallback=None)
+
+    taper = config.getboolean(section, "taper", fallback=True)
+    filter_fmin = 1.0 / config.getfloat(section, "filter_tmax")
+    filter_fmax = 1.0 / config.getfloat(section, "filter_tmin")
+    enabled = config.getboolean(section, "enabled")
+    ncol = config.getint(section, "ncol_per_component")
+
+    # Optionally get components, fallback empty list if missing
+    if config.has_option(section, "components"):
+        components = [c.strip() for c in config.get(section, "components").split(",")]
+    elif section in ["P_WAVE"]:
+        components = ["Z"]
+    elif section in ["SH_WAVE"]:
+        components = ["T"]
+
+    return {
+        "t_before": t_before,
+        "t_after": t_after,
+        "taper": taper,
+        "filter_fmin": filter_fmin,
+        "filter_fmax": filter_fmax,
+        "enabled": enabled,
+        "ncol_per_component": ncol,
+        "components": components,
+    }
 
 
-SHwave_tmin = -config.getfloat("SH_WAVE", "t_before")
-SHwave_tmax = config.getfloat("SH_WAVE", "t_after")
-SHwave_filter_fmin = 1.0 / config.getfloat("SH_WAVE", "filter_tmax")
-SHwave_filter_fmax = 1.0 / config.getfloat("SH_WAVE", "filter_tmin")
-SHwave_enabled = config.getboolean("SH_WAVE", "enabled")
-SHwave_ncol_per_component = config.getint("SH_WAVE", "ncol_per_component")
-
-
-surface_waves_filter_fmin = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmax")
-surface_waves_filter_fmax = 1.0 / config.getfloat("SURFACE_WAVES", "filter_tmin")
-surface_waves_tmax = config.getfloat("SURFACE_WAVES", "tmax", fallback=None)
-surface_waves_enabled = config.getboolean("SURFACE_WAVES", "enabled")
-surface_waves_ncol_per_component = config.getint("SURFACE_WAVES", "ncol_per_component")
-surface_waves_components = config.get("SURFACE_WAVES", "components").split(",")
+p_window_config = get_wave_config(config, ["P_WAVE"])
+s_window_config = get_wave_config(config, ["SH_WAVE"])
+origin_time_window_config = get_wave_config(config, ["GENERIC_WAVE", "SURFACE_WAVES"])
 
 processed_data = {}
 if config.has_section("PROCESSED_WAVEFORMS"):
@@ -196,70 +240,57 @@ print(station_coords)
 
 nstations = len(station_coords)
 
+
 Pwave = WaveformFigureGenerator(
     "P",
-    Pwave_tmin,
-    Pwave_tmax,
-    Pwave_filter_fmin,
-    Pwave_filter_fmax,
-    Pwave_enabled,
-    Pwave_ncol_per_component,
     nstations,
-    ["Z"],
     n_syn_model,
     kind_misfit,
     colors,
     line_widths,
     scaling,
     normalize,
+    shift_match_correlation,
     relative_offset,
     annotations,
     global_legend_labels,
+    **p_window_config,
 )
+
 SHwave = WaveformFigureGenerator(
     "SH",
-    SHwave_tmin,
-    SHwave_tmax,
-    SHwave_filter_fmin,
-    SHwave_filter_fmax,
-    SHwave_enabled,
-    SHwave_ncol_per_component,
     nstations,
-    ["T"],
     n_syn_model,
     kind_misfit,
     colors,
     line_widths,
     scaling,
     normalize,
+    shift_match_correlation,
     relative_offset,
     annotations,
     global_legend_labels,
+    **s_window_config,
 )
-surface_waves = WaveformFigureGenerator(
-    "surface_waves",
-    0.0,
-    surface_waves_tmax,
-    surface_waves_filter_fmin,
-    surface_waves_filter_fmax,
-    surface_waves_enabled,
-    surface_waves_ncol_per_component,
+generic_wave = WaveformFigureGenerator(
+    "generic",
     nstations,
-    surface_waves_components,
     n_syn_model,
     kind_misfit,
     colors,
     line_widths,
     scaling,
     normalize,
+    shift_match_correlation,
     relative_offset,
     annotations,
     global_legend_labels,
+    **origin_time_window_config,
 )
 
 components = ["E", "N", "Z"]
 
-if Pwave_enabled and not (SHwave_enabled or surface_waves_enabled):
+if Pwave.enabled and not (SHwave.enabled or generic_wave.enabled):
     # we do not need to compute E and N if Pwave only
     components = ["Z"]
 
@@ -297,8 +328,8 @@ if "axitra" in software and source_files:
     )
     list_synthetics_all += list_synthetics
     t_obs_before, t_obs_after = 100, 400
-    if not surface_waves_tmax:
-        surface_waves.tmax = duration
+    if not generic_wave.t_after:
+        generic_wave.t_after = duration
 
 if "pyprop8" in software and source_files:
     from pyprop8_routines import generate_synthetics_pyprop8
@@ -314,8 +345,8 @@ if "pyprop8" in software and source_files:
     )
     list_synthetics_all += list_synthetics
     t_obs_before, t_obs_after = 100, 400
-    if not surface_waves_tmax:
-        surface_waves.tmax = duration
+    if not generic_wave.t_after:
+        generic_wave.t_after = duration
 
 if "instaseis" in software and source_files:
     list_synthetics = generate_synthetics_instaseis(
@@ -327,6 +358,7 @@ if "instaseis" in software and source_files:
         components,
         path_observations,
         projection,
+        instaseis_modes,
     )
     list_synthetics_all += list_synthetics
 
@@ -335,8 +367,8 @@ if "instaseis" in software and source_files:
     )
 
     t_obs_before, t_obs_after = 1000, duration_synthetics + 1000
-    if not surface_waves_tmax:
-        surface_waves.tmax = duration_synthetics
+    if not generic_wave.t_after:
+        generic_wave.t_after = duration_synthetics
 
 starttime = t1 - t_obs_before
 endtime = t1 + t_obs_after
@@ -374,19 +406,21 @@ for ins, station_code in enumerate(station_coords):
 
     if Pwave.enabled:
         tP = estimate_travel_time(hypo_depth_in_km, dist, station, "P")
+        Pwave.set_estimated_travel_time(tP)
         Pwave.add_plot_station(st_obs0, lst, t1 + tP, ins)
 
     if SHwave.enabled:
         tS = estimate_travel_time(hypo_depth_in_km, dist, station, "S")
+        SHwave.set_estimated_travel_time(tS)
         SHwave.add_plot_station(st_obs0, lst, t1 + tS, ins)
 
-    if surface_waves.enabled:
-        surface_waves.add_plot_station(st_obs0, lst, t1, ins)
+    if generic_wave.enabled:
+        generic_wave.add_plot_station(st_obs0, lst, t1, ins)
 
 print("goodness of fit (gof) per station:")
-df_merged = merge_gof_dfs(Pwave, SHwave, surface_waves)
+df_merged = merge_gof_dfs(Pwave, SHwave, generic_wave)
 
-# Sort the column names alphabetically starting from "surface_waves_E0"
+# Sort the column names alphabetically starting from "generic_wave_E0"
 sorted_columns = sorted(df_merged.columns[df_merged.columns.get_loc("azimuth") + 1 :])
 # Define the desired column order
 desired_columns = ["station", "distance", "azimuth"] + sorted_columns
@@ -414,10 +448,12 @@ source_files_inc_seissol = [seissol_outputs[k] for k in range(n_seissol_model)] 
     for k in range(n_seissol_model, n_syn_model)
 ]
 
+pd.set_option("display.max_colwidth", None)
 df_station_average["source_file"] = [source_files_inc_seissol[k] for k in file_id]
-print(df_station_average)
+print(df_station_average.sort_values(by="gofa", ascending=False))
 
-fname = "gof_average.pkl"
+waveform_type = "teleseismic" if "instaseis" in software else "regional"
+fname = f"gof_{waveform_type}_waveforms_average.pkl"
 df_station_average.to_pickle(fname)
 print(f"done writing {fname}")
 
@@ -425,13 +461,13 @@ if not os.path.exists("plots"):
     os.makedirs("plots")
 
 if Pwave.enabled:
-    fname_P = f"{prefix}_Pwave.{ext}"
+    fname_P = f"{prefix}_P.{ext}"
     Pwave.finalize_and_save_fig(fname_P)
 
 if SHwave.enabled:
-    fname_SH = f"{prefix}_SHwave.{ext}"
+    fname_SH = f"{prefix}_SH.{ext}"
     SHwave.finalize_and_save_fig(fname_SH)
 
-if surface_waves.enabled:
-    fname_surface_waves = f"{prefix}_surface_waves_signal.{ext}"
-    surface_waves.finalize_and_save_fig(fname_surface_waves)
+if generic_wave.enabled:
+    fname_generic_wave = f"{prefix}_generic.{ext}"
+    generic_wave.finalize_and_save_fig(fname_generic_wave)

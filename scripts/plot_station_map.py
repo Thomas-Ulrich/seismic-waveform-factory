@@ -16,12 +16,13 @@ from geodetic_utils import add_distance_backazimuth_to_df
 from scalebar import scale_bar
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import matplotlib.ticker as mticker
+import glob
 
 
 def retrieve_coordinates(client_name, event, station_codes):
     df = pd.DataFrame(columns=["network", "station", "longitude", "latitude"])
-    fn_inventory = f"{path_observations}/inv_{client_name}.xml"
-    if os.path.exists(fn_inventory):
+    fn_inventories = glob.glob(os.path.join(path_observations, "inv_*.xml"))
+    for fn_inventory in fn_inventories:
         inventory = read_inventory(fn_inventory)
         for network in inventory:
             for station in network:
@@ -98,6 +99,7 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
     ax.add_feature(cfeature.BORDERS.with_scale(scale), linestyle=":")
     x = df["longitude"].values
     y = df["latitude"].values
+
     if set_global:
         x1, x2 = min(event["longitude"], x.min()), max(event["longitude"], x.max())
         y1, y2 = min(event["latitude"], y.min()), max(event["latitude"], y.max())
