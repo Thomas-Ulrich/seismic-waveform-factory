@@ -95,7 +95,7 @@ def extract_config_accesses(path, helper_functions={}):
 
 def find_helper_functions():
     helpers = {}
-    for script in glob.glob("../scripts/*.py"):
+    for script in glob.glob("../scripts/*.py") + glob.glob("scripts/*.py"):
         with open(script, "r") as f:
             tree = ast.parse(f.read(), filename=script)
         for node in ast.walk(tree):
@@ -112,7 +112,7 @@ def section_heading(text):
 def main():
     helper_functions = find_helper_functions()
     all_accesses = []
-    for script in glob.glob("../scripts/*.py"):
+    for script in glob.glob("../scripts/*.py") + glob.glob("scripts/*.py"):
         all_accesses.extend(extract_config_accesses(script, helper_functions))
 
     grouped = defaultdict(lambda: defaultdict(list))
