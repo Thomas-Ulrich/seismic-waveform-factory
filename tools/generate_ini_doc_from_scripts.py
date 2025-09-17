@@ -131,7 +131,14 @@ def main():
 
     helper_functions = find_helper_functions()
     all_accesses = []
-    for script in glob.glob("../scripts/*.py") + glob.glob("scripts/*.py"):
+    scripts = glob.glob("../scripts/*.py") + glob.glob("scripts/*.py")
+    print(scripts)
+    cwd = os.path.abspath(os.getcwd())
+    print("Current working directory:", cwd)
+    files = os.listdir(cwd)
+    print("Files in directory:", files)
+
+    for script in scripts:
         all_accesses.extend(extract_config_accesses(script, helper_functions))
 
     grouped = defaultdict(lambda: defaultdict(list))
