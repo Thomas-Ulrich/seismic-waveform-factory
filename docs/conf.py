@@ -3,9 +3,6 @@
 import os
 import sys
 
-# Run script to generate documentation before Sphinx parses .rst
-os.system("python ../tools/generate_ini_doc_from_script.py")
-
 sys.path.insert(0, os.path.abspath(".."))
 
 project = "seismic-waveform-factory"
