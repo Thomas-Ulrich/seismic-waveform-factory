@@ -172,7 +172,7 @@ def main():
                 doc += f"    {key} = {default}\n"
         doc += "\n"
 
-    with open(os.path.join(output_dir, "ini_usage_documentation.rst"), "w") as f:
+    with open(os.path.join(args.out, "ini_usage_documentation.rst"), "w") as f:
         f.write(doc)
 
 
