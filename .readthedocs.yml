@@ -9,7 +9,7 @@ build:
     python: "3.12"
   jobs:
     pre_build:
-      - python tools/generate_ini_doc_from_scripts.py
+      - python tools/generate_ini_doc_from_scripts.py --out docs
 
 sphinx:
   configuration: docs/conf.py
