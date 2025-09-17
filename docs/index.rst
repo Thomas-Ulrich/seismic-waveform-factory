@@ -5,7 +5,7 @@ seismic-waveform-factory
 
 This repository contains a set of Python scripts for earthquake source modeling and synthetic seismogram generation. 
 
-.. include:: introduction.rst
+.. include:: quickstart.rst
 
 Documentation Contents
 ----------------------

@@ -106,9 +106,9 @@ def extract_config_accesses(path, helper_functions={}):
     return accesses
 
 
-def find_helper_functions():
+def find_helper_functions(scripts):
     helpers = {}
-    for script in glob.glob("../scripts/*.py") + glob.glob("scripts/*.py"):
+    for script in scripts:
         with open(script, "r") as f:
             tree = ast.parse(f.read(), filename=script)
         for node in ast.walk(tree):
@@ -129,14 +129,9 @@ def main():
     parser.add_argument("--out", default=".", help="Output directory for .rst files")
     args = parser.parse_args()
 
-    helper_functions = find_helper_functions()
-    all_accesses = []
     scripts = glob.glob("../scripts/*.py") + glob.glob("scripts/*.py")
-    print(scripts)
-    cwd = os.path.abspath(os.getcwd())
-    print("Current working directory:", cwd)
-    files = os.listdir(cwd)
-    print("Files in directory:", files)
+    helper_functions = find_helper_functions(scripts)
+    all_accesses = []
 
     for script in scripts:
         all_accesses.extend(extract_config_accesses(script, helper_functions))
