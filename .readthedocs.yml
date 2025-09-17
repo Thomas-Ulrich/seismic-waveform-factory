@@ -7,11 +7,10 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.12"
+  jobs:
+    pre_build:
+      - python tools/generate_ini_doc_from_scripts.py
 
 sphinx:
   configuration: docs/conf.py
 
-build:
-  jobs:
-    pre_build:
-      - python tools/generate_ini_doc_from_scripts.py
