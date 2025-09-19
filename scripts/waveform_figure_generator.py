@@ -1,4 +1,5 @@
 from obspy.signal.cross_correlation import xcorr_max, correlate
+from obspy import Trace
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -53,6 +54,45 @@ def autoscale_y(ax, margin=0.1):
         ax.set_ylim(bot, top)
 
 
+def add_fault_components(streams, fault_strike):
+    """
+    Given a list of ObsPy streams and a fault strike angle,
+    rotate N/E components into fault-parallel (f) and fault-normal (o) components
+    and add them to each stream.
+
+    Parameters
+    ----------
+    streams : list
+        List of ObsPy Stream objects to process.
+        (You can include st_obs here too.)
+    fault_strike : float
+        Fault strike angle in degrees.
+    """
+    theta_fp = np.deg2rad(fault_strike)
+    theta_fn = np.deg2rad(fault_strike + 90)
+
+    for st in streams:
+        trN = st.select(component="N")[0]
+        trE = st.select(component="E")[0]
+
+        # Rotate
+        fp = trN.data * np.cos(theta_fp) + trE.data * np.sin(theta_fp)
+        fn = trN.data * np.cos(theta_fn) + trE.data * np.sin(theta_fn)
+
+        # Create new traces
+        trFP = Trace(data=fp, header=trN.stats)
+        trFP.stats.channel = trN.stats.channel[:-1] + "f"  # fault parallel
+
+        trFN = Trace(data=fn, header=trN.stats)
+        trFN.stats.channel = trN.stats.channel[:-1] + "o"  # fault normal
+
+        # Append to the same stream
+        st += trFP
+        st += trFN
+
+    return streams
+
+
 class WaveformFigureGenerator:
     def __init__(
         self,
@@ -76,7 +116,11 @@ class WaveformFigureGenerator:
         enabled,
         ncol_per_component,
         components,
+        fault_strike,
     ):
+        mapping = {"normal": "o", "parallel": "f"}
+
+        components = [mapping.get(c, c) for c in components]
         self.components = components
         self.signal_kind = signal_kind
         self.t_before = t_before
@@ -106,6 +150,7 @@ class WaveformFigureGenerator:
         self.annotations = annotations
         self.global_legend_labels = global_legend_labels
         self.estimated_travel_time = 0.0
+        self.fault_strike = fault_strike
 
     def init_gof_pandas_df(self):
         columns = ["station", "distance", "azimuth"]
@@ -238,9 +283,13 @@ class WaveformFigureGenerator:
         lst_copy = [st.copy() for st in lst]
 
         if "T" in self.components:
-            st_obs.rotate(method="NE->RT")
-            for st in lst_copy:
+            for st in [*lst_copy, st_obs]:
                 st.rotate(method="NE->RT")
+
+        if "f" in self.components or "o" in self.components:
+            streams = [*lst_copy, st_obs]
+            add_fault_components(streams, self.fault_strike)
+
         st_obs = st_obs.split()
         for myst in [*lst_copy, st_obs]:
             myst.detrend("demean")
@@ -415,7 +464,7 @@ class WaveformFigureGenerator:
             if self.signal_kind == "generic"
             else max(2.5, 0.025 * self.estimated_travel_time)
         )
-        shiftmax = int(shift_sec_max / f0)
+        shiftmax = int(shift_sec_max * f0)
 
         return strace, otrace, f0, shiftmax
 
@@ -506,7 +555,7 @@ class WaveformFigureGenerator:
         if self.global_legend_labels:
             self.add_global_legend()
         if self.signal_kind == "generic":
-            direction = {"E": "EW", "N": "NS", "Z": "UD"}
+            direction = {"E": "EW", "N": "NS", "Z": "UD", "f": "FP", "o": "FN"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
             self.axarr[-1, -1].set_xlabel("Time (s)")
