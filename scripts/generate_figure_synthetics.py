@@ -192,12 +192,18 @@ def get_wave_config(config, section_names):
     taper = config.getboolean(section, "taper", fallback=True)
     filter_fmin = 1.0 / config.getfloat(section, "filter_tmax")
     filter_fmax = 1.0 / config.getfloat(section, "filter_tmin")
+    fault_strike = config.getfloat(section, "fault_strike", fallback=None)
     enabled = config.getboolean(section, "enabled")
     ncol = config.getint(section, "ncol_per_component")
 
     # Optionally get components, fallback empty list if missing
     if config.has_option(section, "components"):
         components = [c.strip() for c in config.get(section, "components").split(",")]
+        if "o" in components or "f" in components:
+            assert fault_strike is not None, (
+                "fault_strike parameter required for components='f' or 'o'"
+                "(fault-parallel and normal)"
+            )
     elif section in ["P_WAVE"]:
         components = ["Z"]
     elif section in ["SH_WAVE"]:
@@ -212,6 +218,7 @@ def get_wave_config(config, section_names):
         "enabled": enabled,
         "ncol_per_component": ncol,
         "components": components,
+        "fault_strike": fault_strike,
     }
 
 
