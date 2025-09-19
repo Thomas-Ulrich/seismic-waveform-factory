@@ -464,7 +464,7 @@ class WaveformFigureGenerator:
             if self.signal_kind == "generic"
             else max(2.5, 0.025 * self.estimated_travel_time)
         )
-        shiftmax = int(shift_sec_max / f0)
+        shiftmax = int(shift_sec_max * f0)
 
         return strace, otrace, f0, shiftmax
 
