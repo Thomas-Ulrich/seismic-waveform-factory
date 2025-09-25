@@ -129,7 +129,9 @@ hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
 station_codes_list = config.get("GENERAL", "stations")
 station_codes = [v.strip() for v in station_codes_list.split(",")]
 colors = config.get("GENERAL", "line_colors").split(",")
-line_widths = [float(v) for v in config.get("GENERAL", "line_widths").split(",")]
+line_widths = [
+    float(v) for v in config.get("GENERAL", "line_widths", fallback="1").split(",")
+]
 
 
 def extend_if_necessary(colors, n, name):
