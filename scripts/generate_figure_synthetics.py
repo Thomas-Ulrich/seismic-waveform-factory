@@ -29,11 +29,9 @@ pd.set_option("display.colheader_justify", "center")  # Center column headers (o
 
 
 parser = argparse.ArgumentParser(
-    description=(
-        "generate synthetics with instaseis or axitra given sources and stations"
-    )
+    description=("generate comparison plots of seismic waveform synthetics")
 )
-parser.add_argument("config_file", help="config file describing event and stations")
+parser.add_argument("config_file", help="configuration file")
 args = parser.parse_args()
 
 
