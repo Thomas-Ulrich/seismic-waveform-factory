@@ -109,7 +109,8 @@ class WaveformFigureGenerator:
                 "fault_strike parameter required for components='f' or 'o'"
                 "(fault-parallel and normal)"
             )
-
+        self.gen_cfg = general_cfg
+        self.plt_cfg = plt_cfg
         self.signal_kind = plt_cfg["type"]
         self.t_before = -plt_cfg["t_before"]
         self.t_after = plt_cfg["t_after"]
@@ -130,7 +131,7 @@ class WaveformFigureGenerator:
         self.colors = general_cfg["line_colors"]
         self.line_widths = general_cfg["line_widths"]
         self.relative_offset = general_cfg["relative_offset"]
-        self.annotations = general_cfg["annotations"]
+        self.annotations = plt_cfg["annotations"]
         self.global_legend_labels = general_cfg["global_legend_labels"]
         self.estimated_travel_time = 0.0
 
@@ -346,9 +347,13 @@ class WaveformFigureGenerator:
                 autoscale_y(self.axarr[ins, j0])
 
         # Compute rMRS misfit and print it on plot
-        dist = otrace.stats.distance
-        distance_unit = otrace.stats.distance_unit
-        distance_unit = "°" if distance_unit == "degree" else distance_unit
+        if self.annotations["distance_unit"] == "degree":
+            dist = otrace.stats.distance
+            distance_unit = "°"
+        else:
+            dist = otrace.stats.distance_km
+            distance_unit = "km"
+
         azimuth = otrace.stats.back_azimuth
         n_kinematic_models = len(lst_copy)
         temp_dic = {
@@ -369,15 +374,15 @@ class WaveformFigureGenerator:
                 except ValueError:
                     gof, y0 = 0, 0
                 temp_dic[f"{self.signal_kind}_{comp}{ist}"] = gof
-                if "misfit" in self.annotations:
+                if "misfit" in self.annotations["fields"]:
                     gofstrings += [f"{gof:.2f}"]
                 if j == 0 and ist == n_kinematic_models - 1:
-                    if "distance" in self.annotations:
+                    if "distance" in self.annotations["fields"]:
                         annot += [f"d:{dist:.0f}{distance_unit}"]
-                    if "azimuth" in self.annotations:
+                    if "azimuth" in self.annotations["fields"]:
                         annot += [f"a:{azimuth:.0f}°"]
                 if ist == n_kinematic_models - 1:
-                    if "misfit" in self.annotations:
+                    if "misfit" in self.annotations["fields"]:
                         gofstring = "\n" + " ".join(gofstrings)
                         annot += [f"{gofstring}"]
                     if self.normalize:
@@ -535,7 +540,11 @@ class WaveformFigureGenerator:
 
     def finalize_and_save_fig(self, fname=None):
         if fname is None:
-            fname = f"plots/{self.signal_kind}.pdf"
+            setup_name = self.gen_cfg["setup_name"]
+            ext = self.gen_cfg["figure_extension"]
+            plot_type = self.plt_cfg["type"]
+            fname = f"plots/{setup_name}_{self.signal_kind}_{plot_type}.{ext}"
+
         if self.global_legend_labels:
             self.add_global_legend()
         if self.signal_kind == "generic":

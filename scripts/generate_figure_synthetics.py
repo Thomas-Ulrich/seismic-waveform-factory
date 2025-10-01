@@ -78,10 +78,6 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
 
 print(syn_types)
 
-if cfg["general"]["annotations"]["distance_unit"] == "auto":
-    unit = "degree" if "instaseis" in syn_types else "km"
-    cfg["general"]["annotations"]["distance_unit"] = unit
-
 
 def extend_if_necessary(colors, n, name):
     ncolors = len(colors)
@@ -107,8 +103,12 @@ plt.rcParams.update({"font.size": cfg["general"]["font_size"]})
 
 wf_plots = []
 for wf_plot_config in cfg["waveform_plots"]:
+    if wf_plot_config["annotations"]["distance_unit"] == "auto":
+        unit = "degree" if "instaseis" in syn_types else "km"
+        wf_plot_config["annotations"]["distance_unit"] = unit
     wf_plot = WaveformFigureGenerator(cfg["general"], wf_plot_config, n_syn_model)
     wf_plots.append(wf_plot)
+
 
 os.makedirs(cfg["general"]["path_observations"], exist_ok=True)
 
@@ -269,13 +269,12 @@ for ins, station_code in enumerate(station_coords):
     azimuth = gps2dist_azimuth(lat1=lat, lon1=lon, lat2=hypo["lat"], lon2=hypo["lon"])[
         2
     ]
-    if cfg["general"]["annotations"]["distance_unit"] == "km":
-        dist = degrees2kilometers(dist)
+    dist_km = degrees2kilometers(dist)
     for st in [*lst, st_obs0]:
         for tr in st:
             tr.stats.back_azimuth = azimuth
             tr.stats.distance = dist
-            tr.stats.distance_unit = cfg["general"]["annotations"]["distance_unit"]
+            tr.stats.distance_km = dist_km
 
     phase_dic = {"p": "P", "sh": "S"}
     for wf_plot in wf_plots:
