@@ -1,6 +1,6 @@
+import cmt
 import numpy as np
 import seissolxdmf
-import cmt
 
 
 class FaultOutput:

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+import argparse
 import os
 from datetime import timedelta
+
 from HinetPy import Client
 from obspy import UTCDateTime
-import argparse
 
 parser = argparse.ArgumentParser(
     description="download event data from bosai.jp using hinetpy"

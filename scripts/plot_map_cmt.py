@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-import numpy as np
 import argparse
-import h5py
-import matplotlib.pyplot as plt
-import matplotlib
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import cmt
+import h5py
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 from obspy.imaging.mopad_wrapper import beach
 from pyproj import Transformer
-import cmt
 from scalebar import scale_bar
 
 

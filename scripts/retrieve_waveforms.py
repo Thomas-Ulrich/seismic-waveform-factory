@@ -1,17 +1,16 @@
-from obspy import read
-from lxml.etree import XMLSyntaxError
-from obspy.clients.fdsn.header import FDSNNoDataException, FDSNException
-from obspy.clients.fdsn import Client, RoutingClient
-from requests.exceptions import ConnectionError
-from obspy.core.inventory import Inventory
-from obspy.core.util.obspy_types import ObsPyException
-from obspy import read_inventory
+import glob
 import gzip
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
-from obspy import UTCDateTime
-import glob
+
+from lxml.etree import XMLSyntaxError
+from obspy import UTCDateTime, read, read_inventory
+from obspy.clients.fdsn import Client, RoutingClient
+from obspy.clients.fdsn.header import FDSNException, FDSNNoDataException
+from obspy.core.inventory import Inventory
+from obspy.core.util.obspy_types import ObsPyException
+from requests.exceptions import ConnectionError
 
 
 def initialize_client(client_name):

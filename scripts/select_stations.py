@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-from obspy import UTCDateTime
-from obspy.clients.fdsn import Client, RoutingClient
-from obspy.core.inventory import Inventory
-from obspy import read_inventory
-import pandas as pd
-import numpy as np
 import argparse
 import configparser
 import os
-import jinja2
+
 import geopandas as gpd
-from geopy.distance import geodesic
-from pyproj import Transformer
-from geodetic_utils import add_distance_backazimuth_to_df
-from retrieve_waveforms import retrieve_waveforms, filter_channels_by_availability
-from plot_station_map import generate_station_map
+import jinja2
+import numpy as np
+import pandas as pd
 from fault_processing import compute_shapely_polygon, get_fault_slip_coords
+from geodetic_utils import add_distance_backazimuth_to_df
+from geopy.distance import geodesic
+from obspy import UTCDateTime, read_inventory
+from obspy.clients.fdsn import Client, RoutingClient
+from obspy.core.inventory import Inventory
+from plot_station_map import generate_station_map
+from pyproj import Transformer
+from retrieve_waveforms import filter_channels_by_availability, retrieve_waveforms
 from scipy import spatial
 from waveform_figure_utils import get_station_files_dict
 

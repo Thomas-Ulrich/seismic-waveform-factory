@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
 import configparser
-import os
-from waveform_figure_utils import estimate_travel_time
 import json
+import os
 
+from waveform_figure_utils import estimate_travel_time
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

@@ -1,12 +1,13 @@
-from obspy.signal.cross_correlation import xcorr_max, correlate
-from obspy import Trace
+import os
+
+import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.offsetbox import AnchoredText
-from obspy.signal.tf_misfit import pg, eg
-import matplotlib.lines as mlines
-import os
+from obspy import Trace
+from obspy.signal.cross_correlation import correlate, xcorr_max
+from obspy.signal.tf_misfit import eg, pg
 
 plt.rcParams["font.family"] = "sans"
 

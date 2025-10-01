@@ -1,6 +1,7 @@
-import numpy as np
-import h5py
 import sys
+
+import h5py
+import numpy as np
 
 
 def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):

@@ -1,6 +1,7 @@
 import argparse
+
 import h5py
-from obspy.imaging.beachball import mt2plane, MomentTensor
+from obspy.imaging.beachball import MomentTensor, mt2plane
 
 parser = argparse.ArgumentParser(
     description="compute nodal plate from Moment Tensor (h5) file"

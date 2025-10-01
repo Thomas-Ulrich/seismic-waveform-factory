@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-from obspy import UTCDateTime
-from obspy.geodetics import locations2degrees
-from obspy.geodetics.base import gps2dist_azimuth
 import argparse
 import configparser
-import matplotlib.pyplot as plt
+import glob
 import os
+import sys
+from itertools import cycle
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from obspy import UTCDateTime
+from obspy.geodetics import degrees2kilometers, locations2degrees
+from obspy.geodetics.base import gps2dist_azimuth
 from retrieve_waveforms import retrieve_waveforms
 from waveform_figure_generator import WaveformFigureGenerator
-import sys
 from waveform_figure_utils import (
     compile_station_coords_main,
     estimate_travel_time,
@@ -16,10 +20,6 @@ from waveform_figure_utils import (
     merge_gof_dfs,
     reorder_station_coords_from_azimuth,
 )
-from itertools import cycle
-import glob
-import pandas as pd
-from obspy.geodetics import degrees2kilometers
 
 # Ensure all rows and columns are displayed
 pd.set_option("display.max_rows", None)  # Show all rows
@@ -29,11 +29,9 @@ pd.set_option("display.colheader_justify", "center")  # Center column headers (o
 
 
 parser = argparse.ArgumentParser(
-    description=(
-        "generate synthetics with instaseis or axitra given sources and stations"
-    )
+    description=("generate comparison plots of seismic waveform synthetics")
 )
-parser.add_argument("config_file", help="config file describing event and stations")
+parser.add_argument("config_file", help="configuration file")
 args = parser.parse_args()
 
 
@@ -129,7 +127,9 @@ hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
 station_codes_list = config.get("GENERAL", "stations")
 station_codes = [v.strip() for v in station_codes_list.split(",")]
 colors = config.get("GENERAL", "line_colors").split(",")
-line_widths = [float(v) for v in config.get("GENERAL", "line_widths").split(",")]
+line_widths = [
+    float(v) for v in config.get("GENERAL", "line_widths", fallback="1").split(",")
+]
 
 
 def extend_if_necessary(colors, n, name):
