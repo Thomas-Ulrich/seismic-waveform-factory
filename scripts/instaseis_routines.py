@@ -73,9 +73,21 @@ def fft_reconvolve_stf(db, trace_data, new_stf):
 def geographic2geocentric(lat):
     # geographic to geocentric
     # https://en.wikipedia.org/wiki/Latitude#Geocentric_latitude
+    # https://instaseis.net/_modules/instaseis/helpers.html
     f = 1.0 / 298.257223563
     e2 = 2 * f - f**2
-    return np.rad2deg(np.arctan((1 - e2) * np.tan(np.deg2rad(lat))))
+    lat = np.asarray(lat)
+    singulars = (
+        (np.abs(lat) < 1e-6) | (np.abs(lat - 90) < 1e-6) | (np.abs(lat + 90) < 1e-6)
+    )
+
+    lat_geo = np.rad2deg(np.arctan((1 - e2) * np.tan(np.deg2rad(lat))))
+    lat_geo = np.where(singulars, lat, lat_geo)
+
+    # return scalar if input was scalar
+    if lat.shape == ():
+        return float(lat_geo)
+    return lat_geo
 
 
 def resample_sliprate(slip_rate, dt, dt_new, nsamp):
@@ -93,12 +105,15 @@ def resample_sliprate(slip_rate, dt, dt_new, nsamp):
 
 
 def transform_to_spherical(xyz, proj_string, attrs):
-    if proj_string:
+    if attrs["coordinates_convention"] == "projected":
+        assert (
+            proj_string is not None
+        ), "coordinates are projected but projection is not defined"
         # Define transformer from projected CRS to geographic
         # (lon, lat, ellipsoidal height)
         transformer = pyproj.Transformer.from_proj(
             pyproj.Proj(proj_string),
-            pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84"),
+            pyproj.Proj(proj="latlong", ellps="sphere", datum="WGS84"),
             always_xy=True,
         )
 
@@ -107,13 +122,13 @@ def transform_to_spherical(xyz, proj_string, attrs):
         xyz[:, 1] = lat
         # Depth (xyz[:, 2]) is left unchanged intentionally
     else:
-        if attrs["coordinates_convention"] == b"geographic":
+        if attrs["coordinates_convention"] == "geographic":
             xyz[:, 1] = geographic2geocentric(xyz[:, 1])
-        elif attrs["coordinates_convention"] == b"geocentric":
+        elif attrs["coordinates_convention"] == "geocentric":
             print("coordinates already in geocentric")
         else:
             raise ValueError(
-                "coordinates are projected", attrs["coordinates_convention"]
+                ("coordinates are projected", attrs["coordinates_convention"])
             )
     return xyz
 
@@ -334,28 +349,8 @@ def create_finite_source_from_h5(db, filename, t1, myproj):
         moment_tensors = h5f["moment_tensors"][:, :]
         dt = h5f["dt"][0]
         print(f"sources coordinates in {filename}", xyz)
-        if myproj:
-            print("projecting back to geocentric")
-            import pyproj
+        xyz = transform_to_spherical(xyz, myproj, h5f.attrs)
 
-            myproj = pyproj.Proj(myproj)
-            lla = pyproj.Proj(proj="latlong", ellps="sphere", datum="WGS84")
-            txyz = pyproj.transform(
-                myproj, lla, xyz[:, 0], xyz[:, 1], xyz[:, 2], radians=False
-            )
-            xyz[:, 0] = txyz[0]
-            xyz[:, 1] = txyz[1]
-            # we use the same depth (else it is modified by the ellipsoid to sphere)
-            # xyz[:,2] = txyz[2]
-            print(xyz)
-        else:
-            if h5f.attrs["coordinates_convention"] == b"geographic":
-                xyz[:, 1] = geographic2geocentric(xyz[:, 1])
-            elif h5f.attrs["coordinates_convention"] == b"geocentric":
-                print("coordinates already in geocentric")
-            else:
-                print("coordinates are projected", h5f.attrs["coordinates_convention"])
-                exit()
     lps = []
     for isrc in range(nsource):
         source = instaseis.Source(
