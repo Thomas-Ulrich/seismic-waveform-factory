@@ -29,8 +29,7 @@ def create_axitra_source_from_h5(filename):
         sources[:, 1] = xyz[:, 1]
         sources[:, 2] = xyz[:, 0]
         sources[:, 3] = -xyz[:, 2]
-
-        assert h5f.attrs["coordinates_convention"] == b"geographic"
+        assert h5f.attrs["coordinates_convention"] == "geographic"
 
     hist = np.zeros((nsource, 8))
     delay = 0

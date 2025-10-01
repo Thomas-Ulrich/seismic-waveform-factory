@@ -111,16 +111,15 @@ class WaveformFigureGenerator:
             )
         self.gen_cfg = general_cfg
         self.plt_cfg = plt_cfg
-        self.signal_kind = plt_cfg["type"]
+        self.plot_type = plt_cfg["type"]
+        self.signal_kind = general_cfg["kind"]
         self.t_before = -plt_cfg["t_before"]
         self.t_after = plt_cfg["t_after"]
-        self.taper = plt_cfg["taper"]
         self.filter_fmin = 1.0 / plt_cfg["filter_tmax"]
         self.filter_fmax = 1.0 / plt_cfg["filter_tmin"]
         self.enabled = plt_cfg["enabled"]
         self.ncol_per_component = plt_cfg["ncol_per_component"]
         self.ncomp = len(self.components)
-        self.normalize = plt_cfg["normalize"]
         self.shift_match_correlation = plt_cfg["shift_match_correlation"]
         nstations = len(general_cfg["stations"])
         self.init_several_stations_figure(nstations)
@@ -140,9 +139,9 @@ class WaveformFigureGenerator:
         if len(self.components) > 1:
             prefix = "".join(self.components)
             for i in range(self.n_kinematic_models):
-                columns += [f"{self.signal_kind}_{prefix}{i}"]
+                columns += [f"{self.plot_type}_{prefix}{i}"]
         for i in range(self.n_kinematic_models):
-            columns += [f"{self.signal_kind}_{comp}{i}" for comp in self.components]
+            columns += [f"{self.plot_type}_{comp}{i}" for comp in self.components]
         self.gof_df = pd.DataFrame(columns=columns)
 
     def set_estimated_travel_time(self, travel_time):
@@ -152,7 +151,7 @@ class WaveformFigureGenerator:
         nrow = int(np.ceil(nstations / self.ncol_per_component))
         ncol = self.ncol_per_component * self.ncomp
         # for comparing signals on the same figure
-        if self.signal_kind in ["p", "sh"]:
+        if self.plot_type in ["p", "sh"]:
             height_one_plot = 1.7
             generic_plot = False
         else:
@@ -170,7 +169,7 @@ class WaveformFigureGenerator:
         for j in range(ncol):
             for i in range(nrow):
                 axi = axarr[i, j]
-                if self.normalize:
+                if self.plt_cfg["normalize"]:
                     axi.set_yticks([])
                 if j > 0 and generic_plot:
                     axi.set_yticks([])
@@ -245,13 +244,13 @@ class WaveformFigureGenerator:
 
     def compute_scaling(self, trace, reftime):
         annot = ""
-        if self.normalize:
+        if self.plt_cfg["normalize"]:
             stmax = self.compute_max_abs_value_trace(trace, reftime)
             annot = f"{stmax:.2}"
             if stmax <= 0:
                 stmax = 1.0
             scaling = 1 / stmax if stmax != 0.0 else 1.0
-        elif self.signal_kind in ["p", "sh"]:
+        elif self.plot_type in ["p", "sh"]:
             # micro meters (/s if velocity)
             scaling = 1e6
         else:
@@ -277,7 +276,7 @@ class WaveformFigureGenerator:
         for myst in [*lst_copy, st_obs]:
             myst.detrend("demean")
             myst.detrend("linear")
-            if self.taper:
+            if self.plt_cfg["taper"]:
                 myst.taper(max_percentage=0.05, type="hann")
             myst.filter(
                 "bandpass",
@@ -287,7 +286,7 @@ class WaveformFigureGenerator:
                 zerophase=True,
             )
         st_obs.merge()
-        if self.normalize:
+        if self.plt_cfg["normalize"]:
             offset = self.relative_offset
         else:
             offset = (
@@ -302,12 +301,12 @@ class WaveformFigureGenerator:
             return j + ista // nrows
 
         ylabel = f"{network}.{station}"
-        if self.signal_kind == "generic":
+        if self.plot_type == "generic":
             self.axarr[ins, 0].set_ylabel(ylabel)
 
         for j, comp in enumerate(self.components):
             j0 = compute_j0(j)
-            if self.signal_kind in ["p", "sh"]:
+            if self.plot_type in ["p", "sh"]:
                 self.axarr[ins, j0].set_ylabel(ylabel)
             vmax_annot = []
             nst = len(lst_copy) + 1
@@ -373,7 +372,7 @@ class WaveformFigureGenerator:
                     gof, y0 = self.compute_misfit(myst, st_obs, comp, reftime)
                 except ValueError:
                     gof, y0 = 0, 0
-                temp_dic[f"{self.signal_kind}_{comp}{ist}"] = gof
+                temp_dic[f"{self.plot_type}_{comp}{ist}"] = gof
                 if "misfit" in self.annotations["fields"]:
                     gofstrings += [f"{gof:.2f}"]
                 if j == 0 and ist == n_kinematic_models - 1:
@@ -385,7 +384,7 @@ class WaveformFigureGenerator:
                     if "misfit" in self.annotations["fields"]:
                         gofstring = "\n" + " ".join(gofstrings)
                         annot += [f"{gofstring}"]
-                    if self.normalize:
+                    if self.plt_cfg["normalize"]:
                         annot += ["\n".join(vmax_annot)]
                 annotations = " ".join(annot)
                 loc = "upper" if (y0 - ymin0) / (ymax0 - ymin0) < 0.5 else "lower"
@@ -400,11 +399,10 @@ class WaveformFigureGenerator:
             prefix = "".join(self.components)
             for i in range(self.n_kinematic_models):
                 lgof = [
-                    temp_dic[f"{self.signal_kind}_{comp}{i}"]
-                    for comp in self.components
+                    temp_dic[f"{self.plot_type}_{comp}{i}"] for comp in self.components
                 ]
                 av = sum(lgof) / self.ncomp
-                temp_dic[f"{self.signal_kind}_{prefix}{i}"] = av
+                temp_dic[f"{self.plot_type}_{prefix}{i}"] = av
 
         self.gof_df.loc[len(self.gof_df)] = temp_dic
 
@@ -448,7 +446,7 @@ class WaveformFigureGenerator:
         # Max allowed shift
         shift_sec_max = (
             100.0
-            if self.signal_kind == "generic"
+            if self.plot_type == "generic"
             else max(2.5, 0.025 * self.estimated_travel_time)
         )
         shiftmax = int(shift_sec_max * f0)
@@ -542,20 +540,19 @@ class WaveformFigureGenerator:
         if fname is None:
             setup_name = self.gen_cfg["setup_name"]
             ext = self.gen_cfg["figure_extension"]
-            plot_type = self.plt_cfg["type"]
-            fname = f"plots/{setup_name}_{self.signal_kind}_{plot_type}.{ext}"
+            fname = f"plots/{setup_name}_{self.signal_kind}_{self.plot_type}.{ext}"
 
         if self.global_legend_labels:
             self.add_global_legend()
-        if self.signal_kind == "generic":
+        if self.plot_type == "generic":
             direction = {"E": "EW", "N": "NS", "Z": "UD", "f": "FP", "o": "FN"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
             self.axarr[-1, -1].set_xlabel("Time (s)")
-        elif self.signal_kind == "sh":
+        elif self.plot_type == "sh":
             self.axarr[0, 0].set_title("T")
             self.axarr[-1, -1].set_xlabel("time relative to SH arrival (s)")
-        elif self.signal_kind == "p":
+        elif self.plot_type == "p":
             direction = {"E": "EW", "N": "NS", "Z": "UD"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
