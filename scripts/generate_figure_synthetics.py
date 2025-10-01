@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import configparser
 import glob
 import os
 import sys
@@ -114,18 +113,11 @@ for wf_plot_config in cfg["waveform_plots"]:
 os.makedirs(cfg["general"]["path_observations"], exist_ok=True)
 
 processed_data = {}
-"""
-# To be reintegrated later
-if config.has_section("PROCESSED_WAVEFORMS"):
-    processed_data["directory"] = config.get("PROCESSED_WAVEFORMS", "directory")
-    processed_data["wf_kind"] = config.get("PROCESSED_WAVEFORMS", "wf_kind")
-    processed_data["wf_factor"] = config.getfloat(
-        "PROCESSED_WAVEFORMS", "wf_factor", fallback=1.0
-    )
+if cfg["processed_waveforms"]["directory"]:
+    processed_data = cfg["processed_waveforms"]
     processed_data["station_files"] = get_station_files_dict(
-        processed_data["directory"]
+        cfg["processed_waveforms"]["directory"]
     )
-"""
 
 
 station_file = cfg["general"]["station_file"]
@@ -224,9 +216,9 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
             station_coords,
             t1,
             kind_vd,
-            fmax,
-            duration,
-            velocity_model_fname,
+            wf_syn_config["fmax"],
+            wf_syn_config["duration"],
+            wf_syn_config["velocity_model"],
         )
     else:
         raise ValueError("unknown synthetics type {syn_type}")
@@ -238,7 +230,7 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
     t_obs_before, t_obs_after = 100, 400
     if not generic_wave.t_after:
         generic_wave.t_after = duration
-    # instaseis 
+    # instaseis
     duration_synthetics = (
         list_synthetics[0][0].stats.endtime - list_synthetics[0][0].stats.starttime
     )
