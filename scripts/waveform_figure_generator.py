@@ -97,61 +97,42 @@ def add_fault_components(streams, fault_strike):
 class WaveformFigureGenerator:
     def __init__(
         self,
-        signal_kind,
-        nstations,
+        general_cfg,
+        plt_cfg,
         n_kinematic_models,
-        kind_misfit,
-        colors,
-        line_widths,
-        scaling,
-        normalize,
-        shift_match_correlation,
-        relative_offset,
-        annotations,
-        global_legend_labels,
-        t_before,
-        t_after,
-        taper,
-        filter_fmin,
-        filter_fmax,
-        enabled,
-        ncol_per_component,
-        components,
-        fault_strike,
     ):
         mapping = {"normal": "o", "parallel": "f"}
+        self.components = [mapping.get(c, c) for c in plt_cfg["components"]]
+        self.fault_strike = plt_cfg["fault_strike"]
+        if "o" in self.components or "f" in self.components:
+            assert self.fault_strike is not None, (
+                "fault_strike parameter required for components='f' or 'o'"
+                "(fault-parallel and normal)"
+            )
 
-        components = [mapping.get(c, c) for c in components]
-        self.components = components
-        self.signal_kind = signal_kind
-        self.t_before = t_before
-        self.t_after = t_after
-        self.taper = taper
-        self.filter_fmin = filter_fmin
-        self.filter_fmax = filter_fmax
-        self.enabled = enabled
-        self.ncol_per_component = ncol_per_component
+        self.signal_kind = plt_cfg["type"]
+        self.t_before = -plt_cfg["t_before"]
+        self.t_after = plt_cfg["t_after"]
+        self.taper = plt_cfg["taper"]
+        self.filter_fmin = 1.0 / plt_cfg["filter_tmax"]
+        self.filter_fmax = 1.0 / plt_cfg["filter_tmin"]
+        self.enabled = plt_cfg["enabled"]
+        self.ncol_per_component = plt_cfg["ncol_per_component"]
         self.ncomp = len(self.components)
-        self.normalize = normalize
-        self.shift_match_correlation = shift_match_correlation
+        self.normalize = plt_cfg["normalize"]
+        self.shift_match_correlation = plt_cfg["shift_match_correlation"]
+        nstations = len(general_cfg["stations"])
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
-        assert kind_misfit in [
-            "cross-correlation",
-            "normalized_rms",
-            "min_shifted_normalized_rms",
-            "time-frequency",
-        ]
-        self.kind_misfit = kind_misfit
+        self.kind_misfit = general_cfg["misfit"]
         self.init_gof_pandas_df()
-        self.scaling = scaling
-        self.colors = colors
-        self.line_widths = line_widths
-        self.relative_offset = relative_offset
-        self.annotations = annotations
-        self.global_legend_labels = global_legend_labels
+        self.scaling = plt_cfg["scaling"]
+        self.colors = general_cfg["line_colors"]
+        self.line_widths = general_cfg["line_widths"]
+        self.relative_offset = general_cfg["relative_offset"]
+        self.annotations = general_cfg["annotations"]
+        self.global_legend_labels = general_cfg["global_legend_labels"]
         self.estimated_travel_time = 0.0
-        self.fault_strike = fault_strike
 
     def init_gof_pandas_df(self):
         columns = ["station", "distance", "azimuth"]
@@ -170,7 +151,7 @@ class WaveformFigureGenerator:
         nrow = int(np.ceil(nstations / self.ncol_per_component))
         ncol = self.ncol_per_component * self.ncomp
         # for comparing signals on the same figure
-        if self.signal_kind in ["P", "SH"]:
+        if self.signal_kind in ["p", "sh"]:
             height_one_plot = 1.7
             generic_plot = False
         else:
@@ -269,7 +250,7 @@ class WaveformFigureGenerator:
             if stmax <= 0:
                 stmax = 1.0
             scaling = 1 / stmax if stmax != 0.0 else 1.0
-        elif self.signal_kind in ["P", "SH"]:
+        elif self.signal_kind in ["p", "sh"]:
             # micro meters (/s if velocity)
             scaling = 1e6
         else:
@@ -325,7 +306,7 @@ class WaveformFigureGenerator:
 
         for j, comp in enumerate(self.components):
             j0 = compute_j0(j)
-            if self.signal_kind in ["P", "SH"]:
+            if self.signal_kind in ["p", "sh"]:
                 self.axarr[ins, j0].set_ylabel(ylabel)
             vmax_annot = []
             nst = len(lst_copy) + 1
@@ -552,7 +533,9 @@ class WaveformFigureGenerator:
             raise NotImplementedError(self.kind_misfit)
         return gof, otrace.data[0] * self.scaling
 
-    def finalize_and_save_fig(self, fname):
+    def finalize_and_save_fig(self, fname=None):
+        if fname is None:
+            fname = f"plots/{self.signal_kind}.pdf"
         if self.global_legend_labels:
             self.add_global_legend()
         if self.signal_kind == "generic":
@@ -560,10 +543,10 @@ class WaveformFigureGenerator:
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
             self.axarr[-1, -1].set_xlabel("Time (s)")
-        elif self.signal_kind == "SH":
+        elif self.signal_kind == "sh":
             self.axarr[0, 0].set_title("T")
             self.axarr[-1, -1].set_xlabel("time relative to SH arrival (s)")
-        elif self.signal_kind == "P":
+        elif self.signal_kind == "p":
             direction = {"E": "EW", "N": "NS", "Z": "UD"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
