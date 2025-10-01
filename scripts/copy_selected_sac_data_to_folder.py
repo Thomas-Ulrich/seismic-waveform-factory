@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-import glob
 import argparse
 import configparser
+import glob
 import os
 import shutil
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

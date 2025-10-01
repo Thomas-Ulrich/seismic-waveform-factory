@@ -1,10 +1,10 @@
-import seissolxdmf
-import pyvista as pv
 import networkx as nx
-from shapely.geometry import Polygon
-import vtk
-from vtk.util import numpy_support
 import numpy as np
+import pyvista as pv
+import seissolxdmf
+import vtk
+from shapely.geometry import Polygon
+from vtk.util import numpy_support
 
 
 def create_vtk_grid(

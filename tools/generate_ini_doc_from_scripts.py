@@ -1,8 +1,8 @@
+import argparse
 import ast
 import glob
 import os
 from collections import defaultdict
-import argparse
 
 
 def get_type_from_func(func_name):

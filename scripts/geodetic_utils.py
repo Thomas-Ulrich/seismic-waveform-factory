@@ -1,5 +1,5 @@
-from obspy.geodetics.base import gps2dist_azimuth
 from obspy.geodetics import locations2degrees
+from obspy.geodetics.base import gps2dist_azimuth
 
 
 def add_distance_backazimuth_to_df(df, event):

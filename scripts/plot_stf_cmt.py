@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import numpy as np
 import argparse
+
 import h5py
-import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 
 parser = argparse.ArgumentParser(
     description="compute Moment Tensor from fault output file"

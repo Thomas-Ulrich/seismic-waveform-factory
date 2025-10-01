@@ -1,7 +1,7 @@
-import numpy as np
-from obspy import Trace
 import glob
-from obspy import Stream
+
+import numpy as np
+from obspy import Stream, Trace
 from pyproj import Transformer
 
 

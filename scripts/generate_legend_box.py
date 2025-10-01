@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import matplotlib.pyplot as plt
 import argparse
 import configparser
 import os
 from itertools import cycle
+
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description=("generate legend box only"))
 parser.add_argument("config_file", help="config file describing event and stations")

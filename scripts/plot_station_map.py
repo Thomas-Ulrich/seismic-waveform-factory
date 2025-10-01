@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-from obspy import UTCDateTime
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 import argparse
 import configparser
-import os
-from fault_processing import compute_shapely_polygon
-from retrieve_waveforms import initialize_client
-from obspy import read_inventory
-from obspy.core.inventory import Inventory
-from geodetic_utils import add_distance_backazimuth_to_df
-from scalebar import scale_bar
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-import matplotlib.ticker as mticker
 import glob
+import os
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
+import pandas as pd
+from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+from fault_processing import compute_shapely_polygon
+from geodetic_utils import add_distance_backazimuth_to_df
+from obspy import UTCDateTime, read_inventory
+from obspy.core.inventory import Inventory
+from retrieve_waveforms import initialize_client
+from scalebar import scale_bar
 
 
 def retrieve_coordinates(client_name, event, station_codes):

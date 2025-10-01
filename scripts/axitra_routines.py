@@ -1,10 +1,10 @@
-import numpy as np
-from obspy import read, Trace
-from obspy.imaging.beachball import mt2plane, MomentTensor
 import cmt
-from pyproj import Transformer
-from axitra import Axitra, moment
 import h5py
+import numpy as np
+from axitra import Axitra, moment
+from obspy import Trace, read
+from obspy.imaging.beachball import MomentTensor, mt2plane
+from pyproj import Transformer
 from scipy.signal import fftconvolve
 from tqdm import tqdm
 

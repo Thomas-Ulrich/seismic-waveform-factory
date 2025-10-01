@@ -1,5 +1,6 @@
 import configparser
 import glob
+
 from obspy import read_inventory
 from pyproj import Transformer
 

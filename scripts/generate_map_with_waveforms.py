@@ -1,13 +1,13 @@
-import numpy as np
 import configparser
 import glob
-import matplotlib.pyplot as plt
-from obspy import read, read_inventory
-from obspy.core import UTCDateTime
 
 # from mpl_toolkits.basemap import Basemap
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
+import numpy as np
+from obspy import read, read_inventory
+from obspy.core import UTCDateTime
 
 # Load the configuration file
 config = configparser.ConfigParser()

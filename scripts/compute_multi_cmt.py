@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import numpy as np
-import cmt
 import argparse
-from faultoutput import FaultOutput
-import os
 import json
+import os
+
+import cmt
+import numpy as np
+from faultoutput import FaultOutput
 
 parser = argparse.ArgumentParser(
     description=(

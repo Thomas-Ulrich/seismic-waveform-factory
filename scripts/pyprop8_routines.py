@@ -1,14 +1,15 @@
-import numpy as np
-from obspy import read, Trace
-from obspy.imaging.beachball import mt2plane, MomentTensor
-import cmt
-from pyproj import Transformer
-import h5py
-from scipy.signal import fftconvolve
-import pyprop8 as pp
-from pyprop8.utils import make_moment_tensor, rtf2xyz
-from tqdm import tqdm
 import os
+
+import cmt
+import h5py
+import numpy as np
+import pyprop8 as pp
+from obspy import Trace, read
+from obspy.imaging.beachball import MomentTensor, mt2plane
+from pyproj import Transformer
+from pyprop8.utils import make_moment_tensor, rtf2xyz
+from scipy.signal import fftconvolve
+from tqdm import tqdm
 
 
 def create_pyprop8_receivers(station_coords, transformer):
