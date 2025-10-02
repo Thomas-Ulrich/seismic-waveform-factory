@@ -58,18 +58,6 @@ CONFIG_SCHEMA = {
                     },
                 },
             },
-            "kind": {
-                "default": None,
-                "type": str,
-                "choices": ["acceleration", "velocity", "displacement"],
-                "doc": "Kind/type of synthetics to generate (e.g. 'velocity').",
-            },
-            "stations": {
-                "default": [],
-                "type": list,
-                "element_type": str,
-                "doc": "List of station codes.",
-            },
             "station_file": {
                 "default": None,
                 "type": str,
@@ -124,6 +112,14 @@ CONFIG_SCHEMA = {
                 "type": str,
                 "choices": ["axitra", "instaseis", "pyprop8", "seissol"],
                 "doc": "Type of synthetic generator.",
+            },
+            "name": {
+                "default": "",
+                "type": str,
+                "doc": (
+                    "name identifying the synthetics, to be used in ",
+                    "waveform_plots.synthetics field",
+                ),
             },
             # Axitra / PyProp8
             "path": {
@@ -211,6 +207,24 @@ CONFIG_SCHEMA = {
                 "default": True,
                 "type": bool,
                 "doc": "Whether this plot is enabled.",
+            },
+            "synthetics": {
+                "default": [],
+                "type": list,
+                "element_type": str,
+                "doc": "list of names of synthetics to be plotted, see synthetics.name",
+            },
+            "kind": {
+                "default": None,
+                "type": str,
+                "choices": ["acceleration", "velocity", "displacement"],
+                "doc": "Kind/type of synthetics to generate (e.g. 'velocity').",
+            },
+            "stations": {
+                "default": [],
+                "type": list,
+                "element_type": str,
+                "doc": "List of station codes.",
             },
             "t_before": {
                 "default": 0.0,

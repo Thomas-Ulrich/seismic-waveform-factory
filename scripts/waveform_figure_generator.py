@@ -112,7 +112,7 @@ class WaveformFigureGenerator:
         self.gen_cfg = general_cfg
         self.plt_cfg = plt_cfg
         self.plot_type = plt_cfg["type"]
-        self.signal_kind = general_cfg["kind"]
+        self.signal_kind = plt_cfg["kind"]
         self.t_before = -plt_cfg["t_before"]
         self.t_after = plt_cfg["t_after"]
         self.filter_fmin = 1.0 / plt_cfg["filter_tmax"]
@@ -121,7 +121,7 @@ class WaveformFigureGenerator:
         self.ncol_per_component = plt_cfg["ncol_per_component"]
         self.ncomp = len(self.components)
         self.shift_match_correlation = plt_cfg["shift_match_correlation"]
-        nstations = len(general_cfg["stations"])
+        nstations = len(plt_cfg["stations"])
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
         self.kind_misfit = general_cfg["misfit"]

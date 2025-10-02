@@ -76,9 +76,6 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
     n_syn_model += len(wf_syn_config["source_files"]) + len(wf_syn_config["outputs"])
 
 
-print(syn_types)
-
-
 def extend_if_necessary(colors, n, name):
     ncolors = len(colors)
     if ncolors < n:
@@ -121,13 +118,18 @@ if cfg["processed_waveforms"]["directory"]:
 
 
 station_file = cfg["general"]["station_file"]
-station_codes = cfg["general"]["stations"]
 client_name = cfg["general"]["client"]
 hypo = cfg["general"]["hypocenter"]
 t1 = UTCDateTime(hypo["onset"])
 projection = cfg["general"]["projection"]
-kind_vd = cfg["general"]["kind"]
 path_observations = cfg["general"]["path_observations"]
+
+station_codes = set()
+for wf_plot in wf_plots:
+    if wf_plot.enabled:
+        for code in wf_plot.plt_cfg["stations"]:
+            station_codes.add(code)
+station_codes = list(station_codes)
 
 station_coords = compile_station_coords_main(
     station_codes, station_file, client_name, t1
@@ -136,6 +138,20 @@ station_coords = reorder_station_coords_from_azimuth(
     station_coords, hypo["lon"], hypo["lat"]
 )
 print(station_coords)
+
+sta_infos = {}
+for ins, station_code in enumerate(station_coords):
+    lon, lat = station_coords[station_code]
+    network, station = station_code.split(".")
+    lon2, lat2 = hypo["lon"], hypo["lat"]
+    dist = locations2degrees(lat1=lat, long1=lon, lat2=lat2, long2=lon2)
+    dist_km = degrees2kilometers(dist)
+    azimuth = gps2dist_azimuth(lat1=lat, lon1=lon, lat2=lat2, lon2=lon2)[2]
+    sta_infos[station_code] = {}
+    sta_infos[station_code]["coords"] = station_coords[station_code]
+    sta_infos[station_code]["dist"] = dist
+    sta_infos[station_code]["dist_km"] = dist_km
+    sta_infos[station_code]["azimuth"] = azimuth
 
 
 def collect_components(wf_plots):
@@ -160,13 +176,27 @@ components = collect_components(wf_plots)
 
 gofall = [0 for i in range(n_syn_model)]
 
-list_synthetics_all = []
+synthetics_all = []
 t_obs_before, t_obs_after = 100, 400
 
 
-list_synthetics_all = []
+syn_info = {}
 for i, wf_syn_config in enumerate(cfg["synthetics"]):
-    syn_type = wf_syn_config["type"]
+    syn_name = wf_syn_config["name"]
+    assert (
+        syn_name not in syn_info.keys()
+    ), f"duplicated name ({syn_name}) in synthetics"
+    syn_info[syn_name] = {}
+    for wf_plot in wf_plots:
+        if wf_plot.enabled and syn_name in wf_plot.plt_cfg["synthetics"]:
+            kind = wf_plot.plt_cfg["kind"]
+            if kind not in syn_info[syn_name].keys():
+                syn_info[syn_name][kind] = {"stations": set()}
+            for code in wf_plot.plt_cfg["stations"]:
+                syn_info[syn_name][kind]["stations"].add(code)
+
+
+def generate_synthetics(wf_syn_config, station_coords, syn_type):
     if syn_type == "instaseis":
         from instaseis_routines import generate_synthetics_instaseis
 
@@ -222,63 +252,74 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
         )
     else:
         raise ValueError("unknown synthetics type {syn_type}")
-    list_synthetics_all += list_synthetics
-
-
-"""
-    #maybe not needed: axitra pyprop?
-    t_obs_before, t_obs_after = 100, 400
-    if not generic_wave.t_after:
-        generic_wave.t_after = duration
-    # instaseis
-    duration_synthetics = (
+    duration = (
         list_synthetics[0][0].stats.endtime - list_synthetics[0][0].stats.starttime
     )
-
-    t_obs_before, t_obs_after = 1000, duration_synthetics + 1000
-    if not generic_wave.t_after:
-        generic_wave.t_after = duration_synthetics
-
-"""
-
-starttime = t1 - t_obs_before
-endtime = t1 + t_obs_after
-retrieved_waveforms = retrieve_waveforms(
-    station_codes,
-    client_name,
-    kind_vd,
-    path_observations,
-    starttime,
-    endtime,
-    processed_data=processed_data,
-)
+    return list_synthetics, duration
 
 
-for ins, station_code in enumerate(station_coords):
-    lon, lat = station_coords[station_code]
-    network, station = station_code.split(".")
-    st_obs0 = retrieved_waveforms[f"{network}.{station}"]
-    st_obs0.merge()
+for i, wf_syn_config in enumerate(cfg["synthetics"]):
+    syn_name = wf_syn_config["name"]
+    for kind_vd in syn_info[syn_name].keys():
+        selected_station_coords = {
+            code: station_coords[code]
+            for code in syn_info[syn_name][kind_vd]["stations"]
+        }
+        syn_type = wf_syn_config["type"]
+        st, duration = generate_synthetics(
+            wf_syn_config, selected_station_coords, syn_type
+        )
+        syn_info[syn_name][kind_vd]["stream"] = st
+        syn_info[syn_name][kind_vd]["duration"] = duration
 
-    network = st_obs0[0].stats.network
 
-    lst = []
-    for st_syn in list_synthetics_all:
-        lst += [st_syn.select(station=station)]
-    dist = locations2degrees(lat1=lat, long1=lon, lat2=hypo["lat"], long2=hypo["lon"])
-    azimuth = gps2dist_azimuth(lat1=lat, lon1=lon, lat2=hypo["lat"], lon2=hypo["lon"])[
-        2
-    ]
-    dist_km = degrees2kilometers(dist)
-    for st in [*lst, st_obs0]:
-        for tr in st:
-            tr.stats.back_azimuth = azimuth
-            tr.stats.distance = dist
-            tr.stats.distance_km = dist_km
+print(syn_info)
 
-    phase_dic = {"p": "P", "sh": "S"}
-    for wf_plot in wf_plots:
-        if wf_plot.enabled:
+merged = {}
+for syn_name, syn_types in syn_info.items():
+    for kind, info in syn_types.items():
+        if kind not in merged:
+            merged[kind] = {"stations": set(), "duration": 0.0}
+        merged[kind]["stations"].update(info["stations"])
+        merged[kind]["duration"] = max(merged[kind]["duration"], info["duration"])
+
+retrieved_waveforms = {}
+for kind_vd in merged.keys():
+    duration = merged[kind_vd]["duration"]
+    extra_time = max(100.0, 0.1 * duration)
+    starttime = t1 - extra_time
+    endtime = t1 + duration + extra_time
+    retrieved_waveforms[kind_vd] = retrieve_waveforms(
+        merged[kind_vd]["stations"],
+        client_name,
+        kind_vd,
+        path_observations,
+        starttime,
+        endtime,
+        processed_data=processed_data,
+    )
+
+
+phase_dic = {"p": "P", "sh": "S"}
+for wf_plot in wf_plots:
+    if wf_plot.enabled:
+        print(wf_plot.plt_cfg)
+        kind_vd = wf_plot.plt_cfg["kind"]
+        for ins, code in enumerate(wf_plot.plt_cfg["stations"]):
+            lst = []
+            network, station = code.split(".")
+            st_obs0 = retrieved_waveforms[kind_vd][code]
+            for syn_name in wf_plot.plt_cfg["synthetics"]:
+                for st in syn_info[syn_name][kind_vd]["stream"]:
+                    lst += [st.select(station=station)]
+
+            for st in [*lst, st_obs0]:
+                for tr in st:
+                    tr.stats.back_azimuth = sta_infos[code]["azimuth"]
+                    tr.stats.distance = sta_infos[code]["dist"]
+                    tr.stats.distance_km = sta_infos[code]["dist_km"]
+
+            dist = sta_infos[code]["dist"]
             if wf_plot.signal_kind in ["p", "sh"]:
                 t_phase = estimate_travel_time(
                     hypo["depth_in_km"], dist, station, phase_dic[wf_plot.signal_kind]
@@ -288,6 +329,10 @@ for ins, station_code in enumerate(station_coords):
                 t_phase = 0.0
             wf_plot.add_plot_station(st_obs0, lst, t1 + t_phase, ins)
 
+
+for wf_plot in wf_plots:
+    if wf_plot.enabled:
+        print(wf_plot.gof_df)
 
 """
 print("goodness of fit (gof) per station:")
