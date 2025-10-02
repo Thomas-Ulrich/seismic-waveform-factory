@@ -274,9 +274,9 @@ class WaveformFigureGenerator:
 
         st_obs = st_obs.split()
         for myst in [*lst_copy, st_obs]:
-            myst.detrend("demean")
-            myst.detrend("linear")
             if self.plt_cfg["taper"]:
+                myst.detrend("demean")
+                myst.detrend("linear")
                 myst.taper(max_percentage=0.05, type="hann")
             myst.filter(
                 "bandpass",

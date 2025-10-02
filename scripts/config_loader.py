@@ -1,5 +1,5 @@
 import os
-
+import warnings
 import yaml
 
 
@@ -50,6 +50,15 @@ class ConfigLoader:
                         f"{section_name} expected dict, got {type(data).__name__}"
                     )
                 validated = {}
+
+                # --- warn for unknown keys ---
+                unknown_keys = set(data.keys()) - set(sub_schema.keys())
+                if unknown_keys:
+                    warnings.warn(
+                        f"Section {section_name} has unknown parameter(s): "
+                        f"{', '.join(unknown_keys)}"
+                    )
+
                 for key, rules in sub_schema.items():
                     value = data.get(key, rules.get("default"))
                     validated[key] = validate_section(
