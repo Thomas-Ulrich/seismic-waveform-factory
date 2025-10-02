@@ -18,7 +18,6 @@ from waveform_figure_utils import (
     compile_station_coords_main,
     estimate_travel_time,
     get_station_files_dict,
-    merge_gof_dfs,
     reorder_station_coords_from_azimuth,
 )
 
@@ -344,6 +343,8 @@ for wf_plot in wf_plots:
         print(wf_plot.gof_df)
 
 """
+from waveform_figure_utils import merge_gof_dfs
+
 print("goodness of fit (gof) per station:")
 df_merged = merge_gof_dfs(Pwave, SHwave, generic_wave)
 
