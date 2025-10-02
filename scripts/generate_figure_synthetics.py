@@ -328,9 +328,9 @@ for wf_plot in wf_plots:
                     tr.stats.distance_km = sta_infos[code]["dist_km"]
 
             dist = sta_infos[code]["dist"]
-            if wf_plot.signal_kind in ["p", "sh"]:
+            if wf_plot.plot_type in ["p", "sh"]:
                 t_phase = estimate_travel_time(
-                    hypo["depth_in_km"], dist, station, phase_dic[wf_plot.signal_kind]
+                    hypo["depth_in_km"], dist, station, phase_dic[wf_plot.plot_type]
                 )
                 wf_plot.set_estimated_travel_time(t_phase)
             else:
