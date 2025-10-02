@@ -42,7 +42,7 @@ print(cfg["general"]["setup_name"])
 # print(cfg["waveform_plots"])
 
 
-def collect_synthetic_source_files(syn_config):
+def collect_synthetic_source_files(wf_syn_config):
     source_files = []
     all_files = []
     for source_file in wf_syn_config["source_files"]:
@@ -56,24 +56,29 @@ def collect_synthetic_source_files(syn_config):
             print(files_in_folder)
             all_files.extend(files_in_folder)
     source_files = sorted(list(set(all_files)))
-    print(f"{len(source_files)} source file(s) found for syn {i} ({syn_type})")
+    syn_name = wf_syn_config["name"]
+    print(f"{len(source_files)} source file(s) found for syn {syn_name}")
     return source_files
 
 
 syn_types = set()
-n_syn_model = 0
-for i, wf_syn_config in enumerate(cfg["synthetics"]):
-    syn_type = wf_syn_config["type"]
-    syn_types.add(syn_type)
+for wf_syn_config in cfg["synthetics"]:
+    syn_types.add(wf_syn_config["type"])
 
+n_syn_model = {}
+for wf_syn_config in cfg["synthetics"]:
     source_files = collect_synthetic_source_files(wf_syn_config)
     wf_syn_config["source_files"] = source_files
 
-    if syn_type == "seissol":
+    if wf_syn_config["type"] == "seissol":
         assert len(wf_syn_config["source_files"]) == 0
-    if syn_type != "seissol":
+    if wf_syn_config["type"] != "seissol":
         assert len(wf_syn_config["outputs"]) == 0
-    n_syn_model += len(wf_syn_config["source_files"]) + len(wf_syn_config["outputs"])
+
+    syn_name = wf_syn_config["name"]
+    n_syn_model[syn_name] = len(wf_syn_config["source_files"]) + len(
+        wf_syn_config["outputs"]
+    )
 
 
 def extend_if_necessary(colors, n, name):
@@ -87,12 +92,15 @@ def extend_if_necessary(colors, n, name):
 
 
 print("n_syn_model:", n_syn_model)
+n_syn_model_max = 0
+for key in n_syn_model.keys():
+    n_syn_model_max += n_syn_model[key]
 
 cfg["general"]["line_colors"] = extend_if_necessary(
-    cfg["general"]["line_colors"], n_syn_model, "colors"
+    cfg["general"]["line_colors"], n_syn_model_max, "colors"
 )
 cfg["general"]["line_widths"] = extend_if_necessary(
-    cfg["general"]["line_widths"], n_syn_model, "line_widths"
+    cfg["general"]["line_widths"], n_syn_model_max, "line_widths"
 )
 
 plt.rcParams.update({"font.size": cfg["general"]["font_size"]})
@@ -103,7 +111,10 @@ for wf_plot_config in cfg["waveform_plots"]:
     if wf_plot_config["annotations"]["distance_unit"] == "auto":
         unit = "degree" if "instaseis" in syn_types else "km"
         wf_plot_config["annotations"]["distance_unit"] = unit
-    wf_plot = WaveformFigureGenerator(cfg["general"], wf_plot_config, n_syn_model)
+    n_syn_models = 0
+    for syn_name in wf_plot_config["synthetics"]:
+        n_syn_models += n_syn_model[syn_name]
+    wf_plot = WaveformFigureGenerator(cfg["general"], wf_plot_config, n_syn_models)
     wf_plots.append(wf_plot)
 
 
@@ -173,8 +184,6 @@ def collect_components(wf_plots):
 
 
 components = collect_components(wf_plots)
-
-gofall = [0 for i in range(n_syn_model)]
 
 synthetics_all = []
 t_obs_before, t_obs_after = 100, 400

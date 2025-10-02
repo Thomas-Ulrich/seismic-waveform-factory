@@ -179,7 +179,10 @@ CONFIG_SCHEMA = {
             "directory": {
                 "default": "",
                 "type": str,
-                "doc": "Directory containing processed (observed) waveform files, e.g. from Hinet.",
+                "doc": (
+                    "Directory containing processed (observed) waveform ",
+                    "files, e.g. from Hinet.",
+                ),
             },
             "wf_kind": {
                 "default": "velocity",
