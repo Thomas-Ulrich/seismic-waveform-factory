@@ -337,15 +337,14 @@ def generate_synthetics_instaseis_green(
                     st[i].data *= 0
             rake_rad = np.radians(nodalplane.rake)
             for i in range(len(components)):
-                G_rake0 = fft_reconvolve_stf(
-                    db, lst[0][i].data, np.gradient(resampled_moment_rate)
+                green_defined_rake = M0 * (
+                    np.cos(rake_rad) * lst[0][i].data
+                    + np.sin(rake_rad) * lst[1][i].data
                 )
-                G_rake90 = fft_reconvolve_stf(
-                    db, lst[1][i].data, np.gradient(resampled_moment_rate)
+                st[i].data += fft_reconvolve_stf(
+                    db, green_defined_rake, np.gradient(resampled_moment_rate)
                 )
-                st[i].data += M0 * (
-                    np.cos(rake_rad) * G_rake0 + np.sin(rake_rad) * G_rake90
-                )
+
         synthetics += st
     return synthetics
 
