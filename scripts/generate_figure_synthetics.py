@@ -151,7 +151,12 @@ colors = extend_if_necessary(colors, n_syn_model, "colors")
 line_widths = extend_if_necessary(line_widths, n_syn_model, "line_widths")
 
 
-path_observations = config.get("GENERAL", "path_observations")
+path_observations = config.get(
+    "GENERAL", "path_observations", fallback="./observations"
+)
+path_computed_synthetics = config.get(
+    "GENERAL", "path_computed_synthetics", fallback="./computed_synthetics"
+)
 kind_misfit = config.get("GENERAL", "Misfit", fallback="min_shifted_normalized_rms")
 
 valid_misfits = {
@@ -356,6 +361,7 @@ if "pyprop8" in software and source_files:
         generic_wave.t_after = duration
 
 if "instaseis" in software and source_files:
+    os.makedirs(path_computed_synthetics, exist_ok=True)
     list_synthetics = generate_synthetics_instaseis(
         db_name,
         source_files,
@@ -363,7 +369,7 @@ if "instaseis" in software and source_files:
         t1,
         kind_vd,
         components,
-        path_observations,
+        path_computed_synthetics,
         projection,
         instaseis_modes,
     )
