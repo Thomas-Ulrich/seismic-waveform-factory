@@ -104,7 +104,6 @@ cfg["general"]["line_widths"] = extend_if_necessary(
 
 plt.rcParams.update({"font.size": cfg["general"]["font_size"]})
 
-
 wf_plots = []
 for wf_plot_config in cfg["waveform_plots"]:
     if wf_plot_config["annotations"]["distance_unit"] == "auto":
@@ -115,7 +114,6 @@ for wf_plot_config in cfg["waveform_plots"]:
         n_syn_models += n_syn_model[syn_name]
     wf_plot = WaveformFigureGenerator(cfg["general"], wf_plot_config, n_syn_models)
     wf_plots.append(wf_plot)
-
 
 os.makedirs(cfg["general"]["path_observations"], exist_ok=True)
 
@@ -150,6 +148,7 @@ station_coords = reorder_station_coords_from_azimuth(
 print(station_coords)
 
 sta_infos = {}
+
 for ins, station_code in enumerate(station_coords):
     lon, lat = station_coords[station_code]
     network, station = station_code.split(".")
@@ -215,7 +214,7 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
             t1,
             kind_vd,
             components,
-            path_observations,
+            wf_syn_config["path_computed_synthetics"],
             projection,
             [wf_syn_config["mode"]],
         )

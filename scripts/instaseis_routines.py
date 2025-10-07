@@ -93,16 +93,26 @@ def geographic2geocentric(lat):
 
 def resample_sliprate(slip_rate, dt, dt_new, nsamp):
     """
-    For convolution, the sliprate is needed at the sampling of the fields
-    in the database. This function resamples the sliprate using linear
-    interpolation.
+    Resample sliprate using linear interpolation, preserving total slip.
 
-    :param dt: desired sampling
+    :param slip_rate: original slip-rate array
+    :param dt: original sampling interval
+    :param dt_new: new sampling interval
     :param nsamp: desired number of samples
     """
+
     t_new = np.linspace(0, nsamp * dt_new, nsamp, endpoint=False)
     t_old = np.linspace(0, dt * len(slip_rate), len(slip_rate), endpoint=False)
-    return np.interp(t_new, t_old, slip_rate)
+    slip_rate_new = np.interp(t_new, t_old, slip_rate)
+
+    # Scale to preserve total slip (integral)
+    total_slip_old = np.sum(slip_rate) * dt
+    total_slip_new = np.sum(slip_rate_new) * dt_new
+
+    if total_slip_new != 0:
+        slip_rate_new *= total_slip_old / total_slip_new
+
+    return slip_rate_new
 
 
 def transform_to_spherical(xyz, proj_string, attrs):
@@ -209,7 +219,7 @@ def generate_synthetics_instaseis_green(
     myproj,
     kind_vd,
     components,
-    path_observations,
+    path_computed_synthetics,
     station_coords,
     progress_bar,
 ):
@@ -245,7 +255,9 @@ def generate_synthetics_instaseis_green(
         ), "for using the green function mode, slip_threshold should be small enough"
 
     db_name = f"{db.info.velocity_model}_{db.info.period}s"
-    hdf5_file = f"{path_observations}/greens_{db_name}_dh{dh}_nz{NZ}.h5"
+    hdf5_file = (
+        f"{path_computed_synthetics}/greens_{db_name}_{kind_vd}_dh{dh}_nz{NZ}.h5"
+    )
     synthetics = Stream()
 
     for station_code in station_coords:
@@ -260,7 +272,6 @@ def generate_synthetics_instaseis_green(
             station=station,
         )
         # print(f"generating instaseis synthetics for station {station}")
-
         for isrc in range(nsource):
             fault_tag = fault_tags[isrc]
             segment = segment_indices[isrc]
@@ -293,16 +304,14 @@ def generate_synthetics_instaseis_green(
                         origin_time=t1,
                         dt=dt,
                     )
-                    sliprate = np.zeros_like(db.info.sliprate)
-                    sliprate[1] = 1.0 / db.info.dt
                     st0 = db.get_seismograms(
                         source=source,
                         receiver=receiver,
                         kind=kind_vd,
                         components=components,
-                        # sliprate = sliprate
                     )
                     for i in range(len(components)):
+                        st0[i].data *= 1.0 / db.info.dt
                         st0[i].stats.starttime = t1
                         st0[i].stats.source_longitude = xyz[isrc, 0]
                         st0[i].stats.source_latitude = xyz[isrc, 1]
@@ -465,7 +474,7 @@ def generate_synthetics_instaseis_green_function_mode(
     t1,
     kind_vd,
     components,
-    path_observations,
+    path_computed_synthetics,
     projection,
 ):
     db = instaseis.open_db(db_name)
@@ -486,7 +495,7 @@ def generate_synthetics_instaseis_green_function_mode(
                 projection,
                 kind_vd,
                 components,
-                path_observations,
+                path_computed_synthetics,
                 station_coords,
                 progress_bar,
             )
@@ -502,7 +511,7 @@ def generate_synthetics_instaseis_classical_mode(
     t1,
     kind_vd,
     components,
-    path_observations,
+    path_computed_synthetics,
     projection,
 ):
     db = instaseis.open_db(db_name)
@@ -544,7 +553,7 @@ def generate_synthetics_instaseis_classical_mode(
                 prefix, _ = os.path.splitext(os.path.basename(source_files[iModel]))
                 c_time = os.path.getctime(source_files[iModel])
                 fname = (
-                    f"{path_observations}/{prefix}_{c_time}_{station}_{kind_vd}_"
+                    f"{path_computed_synthetics}/{prefix}_{c_time}_{station}_{kind_vd}_"
                     f"{t1.format_iris_web_service()}.mseed"
                 )
                 if os.path.isfile(fname):
@@ -579,10 +588,11 @@ def generate_synthetics_instaseis(
     t1,
     kind_vd,
     components,
-    path_observations,
+    path_computed_synthetics,
     projection,
     modes=["classical"],
 ):
+    os.makedirs(path_computed_synthetics, exist_ok=True)
     lst = []
     if "classical" in modes:
         lst1 = generate_synthetics_instaseis_classical_mode(
@@ -592,7 +602,7 @@ def generate_synthetics_instaseis(
             t1,
             kind_vd,
             components,
-            path_observations,
+            path_computed_synthetics,
             projection,
         )
         lst += lst1
@@ -605,7 +615,7 @@ def generate_synthetics_instaseis(
             t1,
             kind_vd,
             components,
-            path_observations,
+            path_computed_synthetics,
             projection,
         )
         lst += lst2

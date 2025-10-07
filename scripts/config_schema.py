@@ -81,7 +81,7 @@ CONFIG_SCHEMA = {
                 "doc": "List of line widths for plots.",
             },
             "path_observations": {
-                "default": "",
+                "default": "./observations",
                 "type": str,
                 "doc": "Path to observed waveform files.",
             },
@@ -163,6 +163,14 @@ CONFIG_SCHEMA = {
                 "type": str,
                 "choices": ["classical", "green_function"],
                 "doc": "Mode for generating Instaseis synthetics.",
+            },
+            "path_computed_synthetics": {
+                "default": "./computed_synthetics",
+                "type": str,
+                "doc": (
+                    "Path where to store computed instaseis synthetics ",
+                    "and green functions",
+                ),
             },
             # SeisSol
             "outputs": {
