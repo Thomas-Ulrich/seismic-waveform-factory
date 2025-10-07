@@ -144,32 +144,72 @@ def transform_to_spherical(xyz, proj_string, attrs):
     return xyz
 
 
-def load_greens_from_hdf5(
-    hdf5_file, station_code, fault_tag, segment, rake, components
+def load_hdf5_to_dict(hdf5_file):
+    """
+    Load an HDF5 file and automatically build ObsPy Stream objects
+    for groups containing component datasets (e.g., Z, N, E).
+    """
+    result = {}
+
+    def recursively_load(h5group, out_dict):
+        # Store group attributes (e.g., *_stats)
+        attrs = {k: v for k, v in h5group.attrs.items()}
+
+        # Collect datasets (components) at this level
+        components = {}
+        for key, item in h5group.items():
+            if isinstance(item, h5py.Group):
+                out_dict[key] = {}
+                recursively_load(item, out_dict[key])
+            elif isinstance(item, h5py.Dataset):
+                components[key] = item[()]  # NumPy array
+
+        # If this group has component datasets, build a Stream
+        if components:
+            traces = []
+            for comp, data in components.items():
+                stats_json = attrs.get(f"{comp}_stats", "{}")
+                try:
+                    stats = json.loads(stats_json)
+                except json.JSONDecodeError:
+                    stats = {}
+                trace = Trace(data=data)
+                trace.stats.update(stats)
+                traces.append(trace)
+
+            if traces:
+                out_dict["_stream"] = Stream(traces)
+
+    # Main entry point
+    with h5py.File(hdf5_file, "r") as h5f:
+        recursively_load(h5f, result)
+
+    return result
+
+
+def load_greens_from_hdf5_dict(
+    hdf5_dict, station_code, fault_tag, segment, rake, components
 ):
-    key = (
-        f"{station_code}/"
-        f"fault_tag_{fault_tag:03d}/"
-        f"segment_{segment[0]:03d}_{segment[1]:03d}/"
-        f"rake_{rake}"
+    """
+    Load synthetic greens functions from a pre-loaded HDF5 dictionary.
+    """
+    # Build the path
+    key_path = (
+        station_code,
+        f"fault_tag_{fault_tag:03d}",
+        f"segment_{segment[0]:03d}_{segment[1]:03d}",
+        f"rake_{rake}",
     )
-    if not os.path.exists(hdf5_file):
+
+    # Navigate through nested dictionary
+    grp = hdf5_dict
+    try:
+        for k in key_path:
+            grp = grp[k]
+    except KeyError:
         return None
 
-    with h5py.File(hdf5_file, "r") as h5f:
-        if key not in h5f:
-            return None
-
-        grp = h5f[key]
-        traces = []
-        for comp in components:
-            data = grp[comp][()]
-            stats_json = grp.attrs.get(f"{comp}_stats", "{}")
-            stats = json.loads(stats_json)
-            trace = Trace(data=data)
-            trace.stats.update(stats)
-            traces.append(trace)
-        return Stream(traces)
+    return grp.get("_stream")
 
 
 def save_greens_to_hdf5(
@@ -221,6 +261,7 @@ def generate_synthetics_instaseis_green(
     components,
     path_computed_synthetics,
     station_coords,
+    hdf5_dictionnaries,
     progress_bar,
 ):
     # read HDF5 and create Finite Source for instaseis
@@ -258,6 +299,12 @@ def generate_synthetics_instaseis_green(
     hdf5_file = (
         f"{path_computed_synthetics}/greens_{db_name}_{kind_vd}_dh{dh}_nz{NZ}.h5"
     )
+    if hdf5_file in hdf5_dictionnaries.keys():
+        hdf5_dict = hdf5_dictionnaries[hdf5_file]
+    else:
+        hdf5_dict = load_hdf5_to_dict(hdf5_file)
+        hdf5_dictionnaries[hdf5_file] = hdf5_dict
+
     synthetics = Stream()
 
     for station_code in station_coords:
@@ -285,8 +332,8 @@ def generate_synthetics_instaseis_green(
             )
             lst = []
             for rake in [0, 90]:
-                st0 = load_greens_from_hdf5(
-                    hdf5_file, station_code, fault_tag, segment, rake, components
+                st0 = load_greens_from_hdf5_dict(
+                    hdf5_dict, station_code, fault_tag, segment, rake, components
                 )
                 if st0 is not None:
                     for i in range(len(components)):
@@ -337,15 +384,14 @@ def generate_synthetics_instaseis_green(
                     st[i].data *= 0
             rake_rad = np.radians(nodalplane.rake)
             for i in range(len(components)):
-                G_rake0 = fft_reconvolve_stf(
-                    db, lst[0][i].data, np.gradient(resampled_moment_rate)
+                green_defined_rake = M0 * (
+                    np.cos(rake_rad) * lst[0][i].data
+                    + np.sin(rake_rad) * lst[1][i].data
                 )
-                G_rake90 = fft_reconvolve_stf(
-                    db, lst[1][i].data, np.gradient(resampled_moment_rate)
+                st[i].data += fft_reconvolve_stf(
+                    db, green_defined_rake, np.gradient(resampled_moment_rate)
                 )
-                st[i].data += M0 * (
-                    np.cos(rake_rad) * G_rake0 + np.sin(rake_rad) * G_rake90
-                )
+
         synthetics += st
     return synthetics
 
@@ -478,7 +524,7 @@ def generate_synthetics_instaseis_green_function_mode(
     projection,
 ):
     db = instaseis.open_db(db_name)
-
+    hdf5_dictionnaries = {}
     lst = []
     if len(source_files) == 0:
         return lst
@@ -497,6 +543,7 @@ def generate_synthetics_instaseis_green_function_mode(
                 components,
                 path_computed_synthetics,
                 station_coords,
+                hdf5_dictionnaries,
                 progress_bar,
             )
             lst.append(synth)
