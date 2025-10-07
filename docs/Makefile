@@ -15,7 +15,7 @@ clean:
 	rm -rf $(BUILDDIR)
 
 autogen:
-	python ../tools/generate_ini_doc_from_scripts.py
+	python ../tools/generate_ini_doc_from_scripts.py ../scripts/config_schema.py .
 
 html: autogen
 	$(SPHINXBUILD) -b html $(SPHINXOPTS) $(SOURCEDIR) $(BUILDDIR)/html
