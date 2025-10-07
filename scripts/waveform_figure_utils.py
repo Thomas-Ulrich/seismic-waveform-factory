@@ -169,22 +169,13 @@ def estimate_travel_time(source_depth_in_km, distance_in_degree, station, phase=
     return tP
 
 
-def merge_gof_dfs(Pwave, SHwave, surface_waves):
+def merge_gof_dfs(wf_plots):
     gofall_dfs = []
-    if Pwave.enabled:
-        gofall_dfs.append(Pwave.gof_df)
-
-    if SHwave.enabled:
-        gofall_dfs.append(SHwave.gof_df)
-
-    if surface_waves.enabled:
-        gofall_dfs.append(surface_waves.gof_df)
-
+    for wf_plot in wf_plots:
+        if wf_plot.enabled:
+            df = wf_plot.gof_df.drop(columns=["distance", "azimuth"], errors="ignore")
+            gofall_dfs.append(df)
     df_final = ft.reduce(
-        lambda left, right: pd.merge(
-            left, right, on="station", suffixes=("", "_remove")
-        ),
-        gofall_dfs,
+        lambda left, right: pd.merge(left, right, on="station", how="outer"), gofall_dfs
     )
-    df_final.drop([i for i in df_final.columns if "remove" in i], axis=1, inplace=True)
     return df_final

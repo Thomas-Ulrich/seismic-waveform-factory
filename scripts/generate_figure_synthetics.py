@@ -18,6 +18,7 @@ from waveform_figure_utils import (
     compile_station_coords_main,
     estimate_travel_time,
     get_station_files_dict,
+    merge_gof_dfs,
     reorder_station_coords_from_azimuth,
 )
 
@@ -206,6 +207,7 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
 
 
 def generate_synthetics(wf_syn_config, station_coords, syn_type):
+    source_files = wf_syn_config["source_files"]
     if syn_type == "instaseis":
         from instaseis_routines import generate_synthetics_instaseis
 
@@ -343,11 +345,11 @@ for wf_plot in wf_plots:
     if wf_plot.enabled:
         print(wf_plot.gof_df)
 
-"""
-from waveform_figure_utils import merge_gof_dfs
 
 print("goodness of fit (gof) per station:")
-df_merged = merge_gof_dfs(Pwave, SHwave, generic_wave)
+df_merged = merge_gof_dfs(wf_plots)
+print(df_merged)
+"""
 
 # Sort the column names alphabetically starting from "generic_wave_E0"
 sorted_columns = sorted(df_merged.columns[df_merged.columns.get_loc("azimuth") + 1 :])

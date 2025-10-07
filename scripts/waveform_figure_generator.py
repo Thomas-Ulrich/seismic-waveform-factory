@@ -151,13 +151,14 @@ class WaveformFigureGenerator:
         self.estimated_travel_time = 0.0
 
     def init_gof_pandas_df(self):
+        gof_pref = f"{self.plot_type[0]}{self.plt_id}"
         columns = ["station", "distance", "azimuth"]
         if len(self.components) > 1:
             prefix = "".join(self.components)
             for i in range(self.n_kinematic_models):
-                columns += [f"{self.plot_type}_{prefix}{i}"]
+                columns += [f"{gof_pref}_{prefix}{i}"]
         for i in range(self.n_kinematic_models):
-            columns += [f"{self.plot_type}_{comp}{i}" for comp in self.components]
+            columns += [f"{gof_pref}_{comp}{i}" for comp in self.components]
         self.gof_df = pd.DataFrame(columns=columns)
 
     def set_estimated_travel_time(self, travel_time):
@@ -380,18 +381,18 @@ class WaveformFigureGenerator:
             "azimuth": azimuth,
             "distance_unit": distance_unit,
         }
+        gof_pref = f"{self.plot_type[0]}{self.plt_id}"
         for j, comp in enumerate(self.components):
             j0 = compute_j0(j)
             ymin0, ymax0 = self.axarr[ins, j0].get_ylim()
             gofstrings = []
             annot = []
-
             for ist, myst in enumerate(lst_copy):
                 try:
                     gof, y0 = self.compute_misfit(myst, st_obs, comp, reftime)
                 except ValueError:
                     gof, y0 = 0, 0
-                temp_dic[f"{self.plot_type}_{comp}{ist}"] = gof
+                temp_dic[f"{gof_pref}_{comp}{ist}"] = gof
                 if "misfit" in self.annotations["fields"]:
                     gofstrings += [f"{gof:.2f}"]
                 if j == 0 and ist == n_kinematic_models - 1:
@@ -417,11 +418,9 @@ class WaveformFigureGenerator:
         if len(self.components) > 1:
             prefix = "".join(self.components)
             for i in range(self.n_kinematic_models):
-                lgof = [
-                    temp_dic[f"{self.plot_type}_{comp}{i}"] for comp in self.components
-                ]
+                lgof = [temp_dic[f"{gof_pref}_{comp}{i}"] for comp in self.components]
                 av = sum(lgof) / self.ncomp
-                temp_dic[f"{self.plot_type}_{prefix}{i}"] = av
+                temp_dic[f"{gof_pref}_{prefix}{i}"] = av
 
         self.gof_df.loc[len(self.gof_df)] = temp_dic
 
