@@ -191,9 +191,9 @@ class WaveformFigureGenerator:
                 if self.normalize:
                     axi.set_yticks([])
                 if j > 0 and generic_plot:
+                    axi.sharey(axarr[i, 0])
                     axi.set_yticks([])
                     axi.spines["left"].set_visible(False)
-                    axi.get_shared_y_axes().joined(axi, axarr[i, 0])
                 remove_top_right_axes(axi)
                 axi.tick_params(axis="x", zorder=3)
                 if i < nrow - 1 and generic_plot:
