@@ -341,53 +341,53 @@ for wf_plot in wf_plots:
             wf_plot.add_plot_station(st_obs0, lst, t1 + t_phase, ins)
 
 
+src_loop_up = {}
 for wf_plot in wf_plots:
     if wf_plot.enabled:
         print(wf_plot.gof_df)
-
+        src = []
+        syn_names = wf_plot.plt_cfg["synthetics"]
+        for wf_syn_config in cfg["synthetics"]:
+            name = wf_syn_config["name"]
+            if wf_syn_config["name"] in syn_names:
+                pt_sources = wf_syn_config["source_files"] + wf_syn_config["outputs"]
+                src.extend([(name, pt_source) for pt_source in pt_sources])
+        src_loop_up[f"{wf_plot.plt_id}"] = pt_sources
+print(src_loop_up)
 
 print("goodness of fit (gof) per station:")
 df_merged = merge_gof_dfs(wf_plots)
-print(df_merged)
-"""
-
-# Sort the column names alphabetically starting from "generic_wave_E0"
-sorted_columns = sorted(df_merged.columns[df_merged.columns.get_loc("azimuth") + 1 :])
-# Define the desired column order
-desired_columns = ["station", "distance", "azimuth"] + sorted_columns
-
-# Reorder the columns
-df_merged = df_merged.reindex(columns=desired_columns)
 print(df_merged)
 
 fname = "gof_per_station.pkl"
 df_merged.to_pickle(fname)
 print(f"done writing {fname}")
 
-df_merged.drop(columns=["station", "distance", "azimuth"], inplace=True)
-print("station average gof:")
+df_merged.drop(columns=["station"], inplace=True)
+
 df_station_average = df_merged.mean(axis=0).to_frame(name="gofa").reset_index()
 df_station_average = df_station_average.rename(columns={"index": "gofa_name"})
 file_id = (
-    df_station_average["gofa_name"]
-    .str.extract(r"[^0-9]+([0-9]+)", expand=False)
-    .astype(int)
+    df_station_average["gofa_name"].str.extract(r"(\d+)$", expand=False).astype(int)
+)
+plot_id = (
+    df_station_average["gofa_name"].str.extract(r"(\d+)", expand=False).astype(int)
+)
+df_station_average["plot_id"] = plot_id
+point_srcs = [src_loop_up[f"{p_id}"][f_id] for (p_id, f_id) in zip(plot_id, file_id)]
+df_station_average["src"] = point_srcs
+
+df_station_average["dyn_id"] = (
+    df_station_average["src"].str.extract(r"dyn_(\d+)", expand=False).astype(int)
 )
 
-source_files_inc_seissol = [seissol_outputs[k] for k in range(n_seissol_model)] + [
-    source_files[(k - n_seissol_model) % n_kinematic_model]
-    for k in range(n_seissol_model, n_syn_model)
-]
+print("average across all stations gof:")
+print(df_station_average)
 
-pd.set_option("display.max_colwidth", None)
-df_station_average["source_file"] = [source_files_inc_seissol[k] for k in file_id]
-print(df_station_average.sort_values(by="gofa", ascending=False))
-
-waveform_type = "teleseismic" if "instaseis" in software else "regional"
-fname = f"gof_{waveform_type}_waveforms_average.pkl"
+setup_name = cfg["general"]["setup_name"]
+fname = f"gof_{setup_name}_waveforms_average.pkl"
 df_station_average.to_pickle(fname)
 print(f"done writing {fname}")
-"""
 
 if not os.path.exists("plots"):
     os.makedirs("plots")
