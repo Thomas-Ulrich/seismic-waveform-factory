@@ -94,13 +94,15 @@ def add_fault_components(streams, fault_strike):
     return streams
 
 
+def get_station_value(cfg_entry, key, station):
+    val = cfg_entry.get(key)
+    if isinstance(val, dict):
+        return val.get(station, val.get("default"))
+    return val
+
+
 class WaveformFigureGenerator:
-    def __init__(
-        self,
-        general_cfg,
-        plt_cfg,
-        n_kinematic_models,
-    ):
+    def __init__(self, general_cfg, plt_cfg, n_kinematic_models, plt_id):
         mapping = {"normal": "o", "parallel": "f"}
         self.components = [mapping.get(c, c) for c in plt_cfg["components"]]
         self.fault_strike = plt_cfg["fault_strike"]
@@ -111,10 +113,24 @@ class WaveformFigureGenerator:
             )
         self.gen_cfg = general_cfg
         self.plt_cfg = plt_cfg
+        self.plt_id = plt_id
         self.plot_type = plt_cfg["type"]
         self.signal_kind = plt_cfg["kind"]
-        self.t_before = -plt_cfg["t_before"]
-        self.t_after = plt_cfg["t_after"]
+
+        self.time_shared = (
+            False
+            if isinstance(plt_cfg["t_before"], dict)
+            or isinstance(plt_cfg["t_after"], dict)
+            else True
+        )
+
+        self.t_before = {}
+        self.t_after = {}
+
+        for code in plt_cfg["stations"]:
+            self.t_before[code] = -get_station_value(plt_cfg, "t_before", code)
+            self.t_after[code] = get_station_value(plt_cfg, "t_after", code)
+
         self.filter_fmin = 1.0 / plt_cfg["filter_tmax"]
         self.filter_fmax = 1.0 / plt_cfg["filter_tmin"]
         self.enabled = plt_cfg["enabled"]
@@ -177,14 +193,15 @@ class WaveformFigureGenerator:
                     axi.get_shared_y_axes().joined(axi, axarr[i, 0])
                 remove_top_right_axes(axi)
                 axi.tick_params(axis="x", zorder=3)
-                if i < nrow - 1 and generic_plot:
+                if i < nrow - 1 and generic_plot and self.time_shared:
                     axi.spines["bottom"].set_visible(False)
                     axi.set_xticks([])
                 if j * nrow + i >= self.ncomp * nstations:
                     axi.spines["left"].set_visible(False)
-                    axi.spines["bottom"].set_visible(False)
-                    axi.set_xticks([])
                     axi.set_yticks([])
+                    if self.time_shared:
+                        axi.spines["bottom"].set_visible(False)
+                        axi.set_xticks([])
         self.fig, self.axarr = fig, axarr
 
     def add_global_legend(self):
@@ -217,7 +234,8 @@ class WaveformFigureGenerator:
     def compute_max_abs_value_trace(self, trace, reftime):
         max_abs_value = float("-inf")
         times = trace.times(reftime=reftime)
-        mask = (times >= self.t_before) & (times <= self.t_after)
+        code = f"{trace.stats.network}.{trace.stats.station}"
+        mask = (times >= self.t_before[code]) & (times <= self.t_after[code])
         filtered_data = trace.data[mask]
         if filtered_data.size > 0:
             max_abs_value = max(np.max(filtered_data), -np.min(filtered_data))
@@ -340,7 +358,8 @@ class WaveformFigureGenerator:
                 "k",
                 linewidth=self.line_widths[ist],
             )
-            self.axarr[ins, j0].set_xlim([self.t_before, self.t_after])
+            code = f"{otrace.stats.network}.{otrace.stats.station}"
+            self.axarr[ins, j0].set_xlim([self.t_before[code], self.t_after[code]])
             # rescale to view range
             if len(self.components) == 1:
                 autoscale_y(self.axarr[ins, j0])
@@ -424,8 +443,10 @@ class WaveformFigureGenerator:
         # Find common time window
         start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
         end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
-        start_time_interp = max(reftime + self.t_before, start_osTrace)
-        end_time_interp = min(reftime + self.t_after, end_osTrace)
+
+        code = f"{otrace.stats.network}.{otrace.stats.station}"
+        start_time_interp = max(reftime + self.t_before[code], start_osTrace)
+        end_time_interp = min(reftime + self.t_after[code], end_osTrace)
 
         # Interpolation frequency
         f0 = self.filter_fmax * 4.0
@@ -540,7 +561,10 @@ class WaveformFigureGenerator:
         if fname is None:
             setup_name = self.gen_cfg["setup_name"]
             ext = self.gen_cfg["figure_extension"]
-            fname = f"plots/{setup_name}_{self.signal_kind}_{self.plot_type}.{ext}"
+            fname = (
+                f"plots/{setup_name}_{self.plt_id}",
+                f"_{self.signal_kind}_{self.plot_type}.{ext}",
+            )
 
         if self.global_legend_labels:
             self.add_global_legend()

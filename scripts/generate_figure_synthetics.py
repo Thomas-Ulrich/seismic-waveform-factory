@@ -105,14 +105,16 @@ cfg["general"]["line_widths"] = extend_if_necessary(
 plt.rcParams.update({"font.size": cfg["general"]["font_size"]})
 
 wf_plots = []
-for wf_plot_config in cfg["waveform_plots"]:
+for plt_id, wf_plot_config in enumerate(cfg["waveform_plots"]):
     if wf_plot_config["annotations"]["distance_unit"] == "auto":
         unit = "degree" if "instaseis" in syn_types else "km"
         wf_plot_config["annotations"]["distance_unit"] = unit
     n_syn_models = 0
     for syn_name in wf_plot_config["synthetics"]:
         n_syn_models += n_syn_model[syn_name]
-    wf_plot = WaveformFigureGenerator(cfg["general"], wf_plot_config, n_syn_models)
+    wf_plot = WaveformFigureGenerator(
+        cfg["general"], wf_plot_config, n_syn_models, plt_id
+    )
     wf_plots.append(wf_plot)
 
 os.makedirs(cfg["general"]["path_observations"], exist_ok=True)

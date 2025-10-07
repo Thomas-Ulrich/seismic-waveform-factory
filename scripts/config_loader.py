@@ -24,6 +24,23 @@ class ConfigLoader:
                             f"{section_name} expected float, got {type(value).__name__}"
                         )
                     value = float(value)  # coerce int → float
+                # this is for t_before and t_after
+                elif isinstance(expected_type, tuple):
+                    raise_error = False
+                    if expected_type == (float, dict):
+                        if (not isinstance(value, expected_type)) and (
+                            not isinstance(value, (int, dict))
+                        ):
+                            raise_error = True
+                    else:
+                        if not isinstance(value, expected_type):
+                            raise_error = True
+                    if raise_error:
+                        raise TypeError(
+                            f"{section_name} expected one of "
+                            f"{[t.__name__ for t in expected_type]}, "
+                            f"got {type(value).__name__}"
+                        )
                 elif not isinstance(value, expected_type):
                     raise TypeError(
                         f"{section_name} expected {expected_type.__name__}, "

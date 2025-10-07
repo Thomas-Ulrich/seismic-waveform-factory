@@ -239,20 +239,22 @@ CONFIG_SCHEMA = {
             },
             "t_before": {
                 "default": 0.0,
-                "type": float,
+                "type": (float, dict),
                 "doc": (
                     "Time (seconds) before reference time, defining the beginning of ",
                     " the plotted window. Reference time may be user-defined, event ",
-                    "origin, or P/S onset depending on plot type.",
+                    "origin, or P/S onset depending on plot type. Can be a float or a",
+                    " dict of station-specific values (with optional 'default').",
                 ),
             },
             "t_after": {
                 "default": None,
-                "type": float,
+                "type": (float, dict),
                 "doc": (
                     "Time (seconds) after reference time, defining the end of ",
                     " the plotted window. Reference time may be user-defined, event ",
-                    "origin, or P/S onset depending on plot type.",
+                    "origin, or P/S onset depending on plot type. Can be a float or a",
+                    " dict of station-specific values (with optional 'default').",
                 ),
             },
             "taper": {"default": True, "type": bool, "doc": "Apply taper to waveform."},
