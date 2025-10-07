@@ -188,9 +188,9 @@ class WaveformFigureGenerator:
                 if self.plt_cfg["normalize"]:
                     axi.set_yticks([])
                 if j > 0 and generic_plot:
+                    axi.sharey(axarr[i, 0])
                     axi.set_yticks([])
                     axi.spines["left"].set_visible(False)
-                    axi.get_shared_y_axes().joined(axi, axarr[i, 0])
                 remove_top_right_axes(axi)
                 axi.tick_params(axis="x", zorder=3)
                 if i < nrow - 1 and generic_plot and self.time_shared:
@@ -562,8 +562,8 @@ class WaveformFigureGenerator:
             setup_name = self.gen_cfg["setup_name"]
             ext = self.gen_cfg["figure_extension"]
             fname = (
-                f"plots/{setup_name}_{self.plt_id}",
-                f"_{self.signal_kind}_{self.plot_type}.{ext}",
+                f"plots/{setup_name}_{self.plt_id}"
+                + f"_{self.signal_kind}_{self.plot_type}.{ext}"
             )
 
         if self.global_legend_labels:
