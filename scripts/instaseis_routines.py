@@ -146,29 +146,41 @@ def transform_to_spherical(xyz, proj_string, attrs):
 
 def load_hdf5_to_dict(hdf5_file):
     """
-    Load all datasets and attributes from an HDF5 file into a nested dictionary.
-
-    Datasets are stored as dicts with '_data' and '_attrs' keys.
-    Attributes are stored in '_attrs' at each group/dataset level.
+    Load an HDF5 file and automatically build ObsPy Stream objects
+    for groups containing component datasets (e.g., Z, N, E).
     """
     result = {}
 
     def recursively_load(h5group, out_dict):
-        # Store group attributes
+        # Store group attributes (e.g., *_stats)
         attrs = {k: v for k, v in h5group.attrs.items()}
-        if attrs:
-            out_dict["_attrs"] = attrs
 
+        # Collect datasets (components) at this level
+        components = {}
         for key, item in h5group.items():
-            if isinstance(item, h5py.Dataset):
-                out_dict[key] = {
-                    "_data": item[()],  # NumPy array
-                    "_attrs": {k: v for k, v in item.attrs.items()},
-                }
-            elif isinstance(item, h5py.Group):
+            if isinstance(item, h5py.Group):
                 out_dict[key] = {}
                 recursively_load(item, out_dict[key])
+            elif isinstance(item, h5py.Dataset):
+                components[key] = item[()]  # NumPy array
 
+        # If this group has component datasets, build a Stream
+        if components:
+            traces = []
+            for comp, data in components.items():
+                stats_json = attrs.get(f"{comp}_stats", "{}")
+                try:
+                    stats = json.loads(stats_json)
+                except json.JSONDecodeError:
+                    stats = {}
+                trace = Trace(data=data)
+                trace.stats.update(stats)
+                traces.append(trace)
+
+            if traces:
+                out_dict["_stream"] = Stream(traces)
+
+    # Main entry point
     with h5py.File(hdf5_file, "r") as h5f:
         recursively_load(h5f, result)
 
@@ -197,19 +209,7 @@ def load_greens_from_hdf5_dict(
     except KeyError:
         return None
 
-    # Group-level attributes (where *_stats may be stored)
-    group_attrs = grp.get("_attrs", {})
-    traces = []
-    for comp in components:
-        data_entry = grp[comp]
-        data = data_entry["_data"]
-        stats_json = group_attrs.get(f"{comp}_stats")
-        stats = json.loads(stats_json)
-        trace = Trace(data=data)
-        trace.stats.update(stats)
-        traces.append(trace)
-
-    return Stream(traces)
+    return grp.get("_stream")
 
 
 def save_greens_to_hdf5(
