@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import os
 from itertools import cycle, islice
 
 import matplotlib.pyplot as plt
