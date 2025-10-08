@@ -140,7 +140,10 @@ class WaveformFigureGenerator:
         nstations = len(plt_cfg["stations"])
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
-        self.kind_misfit = general_cfg["misfit"]
+        if plt_cfg["misfit"] == "auto":
+            self.kind_misfit = general_cfg["misfit"]
+        else:
+            self.kind_misfit = plt_cfg["misfit"]
         self.init_gof_pandas_df()
         self.scaling = plt_cfg["scaling"]
         self.colors = general_cfg["line_colors"]

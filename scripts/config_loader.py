@@ -124,7 +124,6 @@ class ConfigLoader:
 
         validated_cfg = {}
         for section, section_schema in schema.items():
-            print("top", section)
             section_data = user_cfg.get(section, None)
             validated_cfg[section] = validate_section(
                 section, section_schema, section_data

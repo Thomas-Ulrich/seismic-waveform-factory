@@ -219,6 +219,21 @@ CONFIG_SCHEMA = {
                 "type": bool,
                 "doc": "Whether this plot is enabled.",
             },
+            "misfit": {
+                "default": "auto",
+                "type": str,
+                "choices": [
+                    "auto",
+                    "min_shifted_normalized_rms",
+                    "normalized_rms",
+                    "cross-correlation",
+                    "time-frequency",
+                ],
+                "doc": (
+                    "Type of misfit metric used. If auto, the misfit defined in ",
+                    "general with be used.",
+                ),
+            },
             "synthetics": {
                 "default": [],
                 "type": list,
