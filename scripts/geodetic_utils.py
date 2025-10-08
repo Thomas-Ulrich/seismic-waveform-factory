@@ -9,14 +9,14 @@ def add_distance_backazimuth_to_df(df, event):
         distance, azimuth, backazimuth = gps2dist_azimuth(
             lat1=row.latitude,
             lon1=row.longitude,
-            lat2=event["latitude"],
-            lon2=event["longitude"],
+            lat2=event["lat"],
+            lon2=event["lon"],
         )
         distance = locations2degrees(
             lat1=row.latitude,
             long1=row.longitude,
-            lat2=event["latitude"],
-            long2=event["longitude"],
+            lat2=event["lat"],
+            long2=event["lon"],
         )
         # Append results to lists
         backazimuth_list.append(backazimuth)

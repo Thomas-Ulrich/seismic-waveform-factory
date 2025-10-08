@@ -85,6 +85,14 @@ CONFIG_SCHEMA = {
                 "type": str,
                 "doc": "Path to observed waveform files.",
             },
+            "fault_file": {
+                "default": "",
+                "type": str,
+                "doc": (
+                    "fault paraview file. used for ploting fault edges, or ",
+                    "computing station distance to fault",
+                ),
+            },
             "misfit": {
                 "default": "min_shifted_normalized_rms",
                 "type": str,

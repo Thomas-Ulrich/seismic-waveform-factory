@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import configparser
 import glob
 import os
 
@@ -11,53 +10,61 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+from config_loader import ConfigLoader
+from config_schema import CONFIG_SCHEMA
 from fault_processing import compute_shapely_polygon
 from geodetic_utils import add_distance_backazimuth_to_df
 from obspy import UTCDateTime, read_inventory
 from obspy.core.inventory import Inventory
+from pyproj import Transformer
 from retrieve_waveforms import initialize_client
 from scalebar import scale_bar
 
 
-def retrieve_coordinates(client_name, event, station_codes):
-    df = pd.DataFrame(columns=["network", "station", "longitude", "latitude"])
-    fn_inventories = glob.glob(os.path.join(path_observations, "inv_*.xml"))
+def retrieve_coordinates(cfg, station_codes):
+    path_observations = cfg["general"]["path_observations"]
+
+    rows = []
+    fn_inventories = glob.glob(os.path.join(path_observations, "*.xml"))
     for fn_inventory in fn_inventories:
         inventory = read_inventory(fn_inventory)
         for network in inventory:
             for station in network:
                 code = f"{network.code}.{station.code}"
                 if code in station_codes:
-                    new_row = {
-                        "network": network.code,
-                        "station": station.code,
-                        "longitude": station.longitude,
-                        "latitude": station.latitude,
-                    }
-                    df.loc[len(df)] = new_row
+                    rows.append(
+                        {
+                            "network": network.code,
+                            "station": station.code,
+                            "longitude": station.longitude,
+                            "latitude": station.latitude,
+                        }
+                    )
 
-    else:
-        client = initialize_client(client_name)
+    df = pd.DataFrame(rows, columns=["network", "station", "longitude", "latitude"])
+    df["code"] = df["network"] + "." + df["station"]
+    print(df)
 
-        event_time = UTCDateTime(event["onset"])
-        networks = set([entry.split(".")[0] for entry in station_codes])
-        print(networks)
+    missing = [code for code in station_codes if code not in df["code"].values]
+    if missing:
+        print(f"{missing} locations not found in inventory files:\n{fn_inventories}")
+        client = initialize_client(cfg["general"]["client"])
+        event_time = UTCDateTime(cfg["general"]["hypocenter"]["onset"])
+        networks = set([entry.split(".")[0] for entry in missing])
         inv = Inventory()
         for net in networks:
-            fn_inventory = f"{path_observations}/inv_stations_{net}.xml"
-            if os.path.exists(fn_inventory):
-                inventory = read_inventory(fn_inventory)
-            else:
-                inventory = client.get_stations(
-                    network=net,
-                    level="station",
-                    starttime=event_time,
-                    endtime=event_time + 100,
-                    includeavailability=True,
-                )
-                inventory.write(fn_inventory, format="STATIONXML")
+            print(f"retrieving station data from network {net}")
+            inventory = client.get_stations(
+                network=net,
+                level="station",
+                starttime=event_time,
+                endtime=event_time + 100,
+                includeavailability=True,
+            )
+            inventory.write(fn_inventory, format="STATIONXML")
             inv.extend(inventory)
-        network_station_pairs = [code.split(".") for code in station_codes]
+
+        network_station_pairs = [code.split(".") for code in missing]
         extracted_data = [
             (network.code, station.code, station.longitude, station.latitude)
             for network in inv.networks
@@ -65,25 +72,45 @@ def retrieve_coordinates(client_name, event, station_codes):
             if [network.code, station.code] in network_station_pairs
         ]
         print(extracted_data)
+        rows = []
         for vals in extracted_data:
             net, sta, lon, lat = vals
-            new_row = {
-                "network": net,
-                "station": sta,
-                "longitude": lon,
-                "latitude": lat,
-            }
-            df.loc[len(df)] = new_row
+            rows.append(
+                {
+                    "network": net,
+                    "station": sta,
+                    "longitude": lon,
+                    "latitude": lat,
+                }
+            )
+        dfm = pd.DataFrame(
+            rows, columns=["network", "station", "longitude", "latitude"]
+        )
+        dfm["code"] = dfm["network"] + "." + dfm["station"]
+        df = pd.concat([df, dfm], ignore_index=True)
 
-    df = add_distance_backazimuth_to_df(df, event)
+    df = add_distance_backazimuth_to_df(df, cfg["general"]["hypocenter"])
     return df
 
 
-def generate_station_map(df, event, set_global=False, setup_name="", fault_info=None):
+def generate_station_map(df, cfg, set_global=False):
     plt.figure(figsize=(6, 6))
+    event = cfg["general"]["hypocenter"]
+
+    faultfname = cfg["general"]["fault_file"]
+    if faultfname:
+        polygons = compute_shapely_polygon(faultfname)
+        projection = cfg["general"]["projection"]
+        assert projection, "projection is need to plot the fault"
+        fault_info = {}
+        fault_info["projection"] = projection
+        fault_info["polygons"] = polygons
+    else:
+        fault_info = None
+
     if set_global:
         projection = ccrs.Orthographic(
-            central_longitude=event["longitude"], central_latitude=event["latitude"]
+            central_longitude=event["lon"], central_latitude=event["lat"]
         )
         geo = ccrs.Geodetic()
         ax = plt.axes(projection=projection)
@@ -101,8 +128,8 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
     y = df["latitude"].values
 
     if set_global:
-        x1, x2 = min(event["longitude"], x.min()), max(event["longitude"], x.max())
-        y1, y2 = min(event["latitude"], y.min()), max(event["latitude"], y.max())
+        x1, x2 = min(event["lon"], x.min()), max(event["lon"], x.max())
+        y1, y2 = min(event["lat"], y.min()), max(event["lat"], y.max())
         dx = 0.2 * (x2 - x1)
         dy = 0.2 * (y2 - y1)
         ax.set_extent(
@@ -131,8 +158,8 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
         x, y, 200, color="r", marker="v", edgecolor="k", zorder=3, transform=geo
     )
     plt.scatter(
-        event["longitude"],
-        event["latitude"],
+        event["lon"],
+        event["lat"],
         200,
         color="orange",
         marker="*",
@@ -140,12 +167,14 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
         zorder=3,
         transform=geo,
     )
-    if fault_info:
-        from pyproj import Transformer
 
-        projection = fault_info["projection"]
+    faultfname = cfg["general"]["fault_file"]
+    if faultfname:
+        polygons = compute_shapely_polygon(faultfname)
+        projection = cfg["general"]["projection"]
+        assert projection, "projection is need to plot the fault"
+
         transformer = Transformer.from_crs(projection, "epsg:4326", always_xy=True)
-        polygons = fault_info["polygons"]
         for poly in polygons:
             x1, y1 = poly.exterior.xy
             x1, y1 = transformer.transform(x1, y1)
@@ -167,66 +196,66 @@ def generate_station_map(df, event, set_global=False, setup_name="", fault_info=
             transform=geo,
         )
 
-    # Add scale bar
-    scale_bar(ax, (0.1, 0.1), 50)
-
     if set_global:
         ax.set_global()
-    if setup_name != "":
-        setup_name = f"{setup_name}_"
+        map_type = "teleseismic"
+    else:
+        map_type = "regional"
+        # Add scale bar
+        scale_bar(ax, (0.1, 0.1), 50)
 
+    setup_name = cfg["general"]["setup_name"]
+    if setup_name:
+        setup_name += "_"
     if not os.path.exists("plots"):
         os.makedirs("plots")
-    fn = f"plots/{setup_name}station_map.pdf"
+    fn = f"plots/{setup_name}station_map_{map_type}.pdf"
     plt.savefig(fn, bbox_inches="tight")
     print(f"done writing {fn}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="generate teleseismic station map")
+    parser = argparse.ArgumentParser(description="generate station map")
     parser.add_argument("config_file", help="config file describing event and stations")
     parser.add_argument(
         "--plot_all_station_file",
         action="store_true",
     )
-
     args = parser.parse_args()
+    cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
 
-    config = configparser.ConfigParser()
-    assert os.path.isfile(args.config_file), f"{args.config_file} not found"
-    config.read(args.config_file)
+    isTeleseismic = {}
+    for plt_syn in cfg["synthetics"]:
+        name = plt_syn["name"]
+        isTeleseismic[name] = False
+        if plt_syn["type"] == "instaseis":
+            isTeleseismic[name] = True
 
-    setup_name = config.get("GENERAL", "setup_name")
-    lSourceFiles = config.get("GENERAL", "source_files").split(",")
-    client_name = config.get("GENERAL", "client")
-    onset = config.get("GENERAL", "onset")
-    event_lon = config.getfloat("GENERAL", "hypo_lon")
-    event_lat = config.getfloat("GENERAL", "hypo_lat")
-    event = {"longitude": event_lon, "latitude": event_lat, "onset": onset}
-    station_codes = config.get("GENERAL", "stations").split(",")
-    station_codes = [x.strip() for x in station_codes]
+    station_codes = {}
+    station_codes["global"] = set()
+    station_codes["regional"] = set()
 
-    software = config.get("GENERAL", "software").split(",")
-    set_global = "axitra" not in software
-    station_file = config.get("GENERAL", "station_file", fallback=None)
-    path_observations = config.get("GENERAL", "path_observations")
+    for plt_id, wf_plot_config in enumerate(cfg["waveform_plots"]):
+        global_sta = any(isTeleseismic[name] for name in wf_plot_config["synthetics"])
+        if wf_plot_config["enabled"]:
+            for code in wf_plot_config["stations"]:
+                if global_sta:
+                    station_codes["global"].add(code)
+                else:
+                    station_codes["regional"].add(code)
 
     if args.plot_all_station_file:
+        station_file = cfg["general"]["station_file"]
+        assert station_file, "station_file is needed with plot_all_station_file"
         df = pd.read_csv(station_file)
         df.rename(columns={"lon": "longitude", "lat": "latitude"}, inplace=True)
+        set_global = False
+        generate_station_map(df, cfg, set_global)
     else:
-        df = retrieve_coordinates(client_name, event, station_codes)
-    print(df)
-
-    faultfname = config.get("GENERAL", "fault_filename", fallback=None)
-
-    if faultfname:
-        polygons = compute_shapely_polygon(faultfname)
-        projection = config.get("GENERAL", "projection")
-        fault_info = {}
-        fault_info["projection"] = projection
-        fault_info["polygons"] = polygons
-    else:
-        fault_info = None
-
-    generate_station_map(df, event, set_global, setup_name, fault_info=fault_info)
+        for v in station_codes.keys():
+            set_global = True if v == "global" else False
+            stations = list(station_codes[v])
+            print(v, stations)
+            if stations:
+                df = retrieve_coordinates(cfg, stations)
+                generate_station_map(df, cfg, set_global)
