@@ -19,6 +19,7 @@ from obspy.core.inventory import Inventory
 from pyproj import Transformer
 from retrieve_waveforms import initialize_client
 from scalebar import scale_bar
+from config_utils import categorize_stations_by_scale
 
 
 def retrieve_coordinates(cfg, station_codes):
@@ -224,25 +225,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
 
-    isTeleseismic = {}
-    for plt_syn in cfg["synthetics"]:
-        name = plt_syn["name"]
-        isTeleseismic[name] = False
-        if plt_syn["type"] == "instaseis":
-            isTeleseismic[name] = True
-
-    station_codes = {}
-    station_codes["global"] = set()
-    station_codes["regional"] = set()
-
-    for plt_id, wf_plot_config in enumerate(cfg["waveform_plots"]):
-        global_sta = any(isTeleseismic[name] for name in wf_plot_config["synthetics"])
-        if wf_plot_config["enabled"]:
-            for code in wf_plot_config["stations"]:
-                if global_sta:
-                    station_codes["global"].add(code)
-                else:
-                    station_codes["regional"].add(code)
+    station_codes = categorize_stations_by_scale(cfg)
 
     if args.plot_all_station_file:
         station_file = cfg["general"]["station_file"]
@@ -254,7 +237,7 @@ if __name__ == "__main__":
     else:
         for v in station_codes.keys():
             set_global = True if v == "global" else False
-            stations = list(station_codes[v])
+            stations = station_codes[v]
             print(v, stations)
             if stations:
                 df = retrieve_coordinates(cfg, stations)
