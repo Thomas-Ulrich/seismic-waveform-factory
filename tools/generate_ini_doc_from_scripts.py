@@ -1,181 +1,108 @@
-import argparse
-import ast
-import glob
+#!/usr/bin/env python3
 import os
-from collections import defaultdict
+import sys
+import importlib.util
+from textwrap import indent
 
 
-def get_type_from_func(func_name):
-    return {"get": "string", "getfloat": "float", "getboolean": "boolean"}.get(
-        func_name, "string"
-    )
+def load_schema(schema_path):
+    """Dynamically load CONFIG_SCHEMA from a Python file."""
+    spec = importlib.util.spec_from_file_location("config_schema", schema_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not hasattr(module, "CONFIG_SCHEMA"):
+        raise ValueError("CONFIG_SCHEMA not found in schema file")
+    return module.CONFIG_SCHEMA
 
 
-def extract_config_keys_from_function(fn_node):
-    accesses = []
-    for node in ast.walk(fn_node):
-        if isinstance(node, ast.Call):
-            if hasattr(node.func, "attr") and node.func.attr.startswith("get"):
-                func_type = get_type_from_func(node.func.attr)
-                args = node.args
-                if len(args) >= 2:
-                    section = None
-                    if isinstance(args[0], ast.Constant):
-                        section = args[0].value
-                    elif isinstance(args[0], ast.Name):
-                        section = f"${args[0].id}"
-                    key = args[1].value if isinstance(args[1], ast.Constant) else None
-                    required = True
-                    default = None
-                    for kw in node.keywords:
-                        if kw.arg == "fallback":
-                            required = False
-                            try:
-                                default = ast.literal_eval(kw.value)
-                            except Exception:
-                                default = None
-                    accesses.append(
-                        {
-                            "section": section,
-                            "key": key,
-                            "type": func_type,
-                            "required": required,
-                            "default": default,
-                        }
-                    )
-    return accesses
+def format_type(t):
+    if isinstance(t, tuple):
+        return ", ".join([format_type(x) for x in t])
+    if isinstance(t, type):
+        return t.__name__
+    return str(t)
 
 
-def extract_config_accesses(path, helper_functions={}):
-    with open(path, "r") as f:
-        tree = ast.parse(f.read(), filename=path)
-    accesses = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            # Direct access
-            if hasattr(node.func, "attr") and node.func.attr.startswith("get"):
-                func_type = get_type_from_func(node.func.attr)
-                args = node.args
-                if len(args) >= 2 and all(
-                    isinstance(arg, ast.Constant) for arg in args[:2]
-                ):
-                    section = args[0].value
-                    key = args[1].value
-                    required = True
-                    default = None
-                    for kw in node.keywords:
-                        if kw.arg == "fallback":
-                            required = False
-                            try:
-                                default = ast.literal_eval(kw.value)
-                            except Exception:
-                                default = None
-                    accesses.append(
-                        {
-                            "section": section,
-                            "key": key,
-                            "type": func_type,
-                            "required": required,
-                            "default": default,
-                            "file": os.path.basename(path),
-                        }
-                    )
-            # Helper function call
-            elif isinstance(node.func, ast.Name) and node.func.id in helper_functions:
-                if len(node.args) >= 2:
-                    section_arg = node.args[1]
-                    if isinstance(section_arg, ast.List):
-                        section_names = [
-                            elt.value
-                            for elt in section_arg.elts
-                            if isinstance(elt, ast.Constant)
-                        ]
-                        for access in helper_functions[node.func.id]:
-                            if access["section"] and access["section"].startswith("$"):
-                                for sname in section_names:
-                                    accesses.append(
-                                        {
-                                            "section": sname,
-                                            "key": access["key"],
-                                            "type": access["type"],
-                                            "required": access["required"],
-                                            "default": access["default"],
-                                            "file": os.path.basename(path),
-                                        }
-                                    )
-    return accesses
+def generate_rst_section(name, schema, level=1):
+    """Generate RST for one schema section (recursively)."""
+    title = f"{name}"
+    underline = "-" * len(title) if level == 1 else "~" * len(title)
+    rst = [f"{title}\n{underline}\n"]
+
+    if "doc" in schema and schema["doc"]:
+        rst.append(schema["doc"] + "\n")
+
+    expected_type = schema.get("type")
+
+    # --- If this is a dict section ---
+    if expected_type == dict:
+        sub_schema = schema.get("schema", {})
+        for key, subschema in sub_schema.items():
+            rst.append(generate_rst_entry(key, subschema, level + 1))
+
+    # --- If this is a list section ---
+    elif expected_type == list:
+        rst.append("\n- Type: list\n")
+        if "element_type" in schema:
+            rst.append(f"  - Element type: {format_type(schema['element_type'])}\n")
+        if "schema" in schema:
+            rst.append("- Each element has structure:\n\n")
+            for key, subschema in schema["schema"].items():
+                rst.append(
+                    indent(generate_rst_entry(key, subschema, level + 1), "    ")
+                )
+
+    else:
+        rst.append(generate_rst_entry(name, schema, level + 1))
+
+    rst.append("\n")
+    return "".join(rst)
 
 
-def find_helper_functions(scripts):
-    helpers = {}
-    for script in scripts:
-        with open(script, "r") as f:
-            tree = ast.parse(f.read(), filename=script)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                if len(node.args.args) >= 2 and node.args.args[0].arg == "config":
-                    accesses = extract_config_keys_from_function(node)
-                    if accesses:
-                        helpers[node.name] = accesses
-    return helpers
+def generate_rst_entry(key, schema, level=2):
+    """Format a single key entry as RST list item."""
+    lines = [f"**{key}**\n"]
+    t = schema.get("type")
+    default = schema.get("default", "None")
+    choices = schema.get("choices")
+    doc = schema.get("doc", "")
 
-
-def section_heading(text):
-    return text + "\n" + "-" * len(text) + "\n\n"
+    lines.append(f"  - Type: {format_type(t)}\n")
+    lines.append(f"  - Default: {default}\n")
+    if choices:
+        lines.append(f"  - Choices: {', '.join(map(str, choices))}\n")
+    if doc:
+        lines.append(f"  - Description: {doc}\n")
+    lines.append("\n")
+    return "".join(lines)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default=".", help="Output directory for .rst files")
-    args = parser.parse_args()
+    if len(sys.argv) < 3:
+        print("Usage: generate_rst_from_schema.py <schema_path> <output_dir>")
+        sys.exit(1)
 
-    scripts = glob.glob("../scripts/*.py") + glob.glob("scripts/*.py")
-    helper_functions = find_helper_functions(scripts)
-    all_accesses = []
+    schema_path = sys.argv[1]
+    output_dir = sys.argv[2]
+    os.makedirs(output_dir, exist_ok=True)
 
-    for script in scripts:
-        all_accesses.extend(extract_config_accesses(script, helper_functions))
+    schema = load_schema(schema_path)
 
-    grouped = defaultdict(lambda: defaultdict(list))
-    for acc in all_accesses:
-        grouped[acc["section"]][acc["key"]].append(acc)
+    doc = [
+        "Configuration Parameters\n",
+        "=========================\n\n",
+        "This document lists all configuration parameters defined in ",
+        "CONFIG_SCHEMA.\n\n",
+    ]
 
-    doc = "INI Parameter Usage Documentation\n"
-    doc += "=================================\n\n"
-    for section in sorted(grouped.keys()):
-        doc += section_heading(f"[{section}]")
-        for key in sorted(grouped[section].keys()):
-            items = grouped[section][key]
-            types = set(item["type"] for item in items)
-            required = all(item["required"] for item in items)
-            defaults = set(
-                str(item["default"]) for item in items if item["default"] is not None
-            )
-            files = set(item["file"] for item in items)
-            doc += f"- **{key}**\n"
-            doc += f"    - Type: {'/'.join(types)}\n"
-            doc += f"    - Required: {'Yes' if required else 'No'}\n"
-            doc += f"    - Default: {', '.join(defaults) if defaults else 'None'}\n"
-            doc += f"    - Used in: {', '.join(sorted(files))}\n\n"
+    for section_name, section_schema in schema.items():
+        doc.append(generate_rst_section(section_name, section_schema, level=1))
 
-        # Example INI block for the section
-        doc += f"Example [{section}] block:\n\n"
-        doc += ".. code-block:: ini\n\n"
-        doc += f"    [{section}]\n"
-        for key in sorted(grouped[section].keys()):
-            items = grouped[section][key]
-            default = next(
-                (item["default"] for item in items if item["default"] is not None), None
-            )
-            # If default is None or string "None"
-            if default is None or default == "None":
-                doc += f"    {key} = <value>\n"
-            else:
-                doc += f"    {key} = {default}\n"
-        doc += "\n"
+    output_file = os.path.join(output_dir, "config_parameters.rst")
+    with open(output_file, "w") as f:
+        f.write("".join(doc))
 
-    with open(os.path.join(args.out, "ini_usage_documentation.rst"), "w") as f:
-        f.write(doc)
+    print(f"RST documentation written to {output_file}")
 
 
 if __name__ == "__main__":

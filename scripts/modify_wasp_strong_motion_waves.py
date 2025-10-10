@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import configparser
 import json
-import os
+from config_loader import ConfigLoader
+from config_schema import CONFIG_SCHEMA
 
 from waveform_figure_utils import estimate_travel_time
 
@@ -13,12 +13,10 @@ if __name__ == "__main__":
     parser.add_argument("config_file", help="config file describing event and stations")
     args = parser.parse_args()
 
-    config = configparser.ConfigParser()
-    assert os.path.isfile(args.config_file), f"{args.config_file} not found"
-    config.read(args.config_file)
+    cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
 
     print("updating strong_motion_waves.json with new durations")
-    hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
+    hypo_depth_in_km = cfg["general"]["hypocenter"]["depth_in_km"]
 
     fn = "strong_motion_waves.json"
 
