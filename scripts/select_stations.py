@@ -390,9 +390,16 @@ def compute_min_max_coords(fault_info):
     return (min(xs), max(xs)), (min(ys), max(ys))
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
-    cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
+def select_station(
+    config_file,
+    number_stations,
+    closest_stations,
+    distance_range,
+    channel,
+    store_format,
+    azimuthal,
+):
+    cfg = ConfigLoader(config_file, CONFIG_SCHEMA)
 
     client_name = cfg["general"]["client"]
     path_observations = cfg["general"]["path_observations"]
@@ -472,8 +479,8 @@ if __name__ == "__main__":
     t_before = extra_time
     t_after = signal_length + extra_time
 
-    if args.distance_range:
-        spatial_range["radius"] = args.distance_range
+    if distance_range:
+        spatial_range["radius"] = distance_range
 
     client = initialize_client(client_name)
 
@@ -498,13 +505,13 @@ if __name__ == "__main__":
             spatial_range,
             t_before,
             t_before,
-            args.channel,
+            channel,
         )
         inventory = remove_synthetics_from_inventory(inventory)
         filtered_networks = [net for net in inventory.networks if net.code != "AM"]
         new_inventory = Inventory(networks=filtered_networks, source=inventory.source)
         all_stations = new_inventory.get_contents()["stations"]
-        if len(all_stations) > (args.number_stations):
+        if len(all_stations) > (number_stations):
             print("remove AM network")
             inventory = new_inventory
         else:
@@ -547,55 +554,53 @@ if __name__ == "__main__":
         ].reset_index(drop=True)
 
     # + 10 because we expect some station with no data
-    if len(available_stations) > (args.number_stations + 10) and not is_teleseismic:
-        dmax = available_stations.iloc[args.number_stations + 10]["distance_km"]
+    if len(available_stations) > (number_stations + 10) and not is_teleseismic:
+        dmax = available_stations.iloc[number_stations + 10]["distance_km"]
         # Create a boolean mask and filter by distance
         mask = (available_stations["distance_km"] >= 0) & (
             available_stations["distance_km"] <= dmax
         )
         other_available_stations = available_stations[~mask]
         available_stations = available_stations[mask]
-        print(
-            f"available ({args.number_stations + 10} closest, that is up to {dmax} km):"
-        )
+        print(f"available ({number_stations + 10} closest, that is up to {dmax} km):")
     else:
         other_available_stations = gpd.GeoDataFrame()
         print("available (no restrictions):")
 
-    if args.azimuthal:
+    if azimuthal:
         available_stations = add_distance_backazimuth_to_df(available_stations, event)
         available_stations = available_stations.drop(columns=["geometry"])
 
     print(available_stations)
     # required if not enough stations in the inventory
-    args.number_stations = min(args.number_stations, len(available_stations))
+    number_stations = min(number_stations, len(available_stations))
     # initialize empty df
     selected_stations = pd.DataFrame(columns=available_stations.columns)
 
     while True:
-        if args.closest_stations and selected_stations.empty:
-            if args.closest_stations <= args.number_stations:
-                print("args.closest_stations <= args.number_stations")
-                args.closest_stations = args.number_stations
+        if closest_stations and selected_stations.empty:
+            if closest_stations <= number_stations:
+                print("closest_stations <= number_stations")
+                closest_stations = number_stations
             previous_selected_stations = selected_stations.copy()
             selected_stations, available_stations = select_closest_stations(
-                available_stations, selected_stations, args.closest_stations
+                available_stations, selected_stations, closest_stations
             )
         else:
             previous_selected_stations = selected_stations.copy()
-            if args.azimuthal:
+            if azimuthal:
                 (
                     selected_stations,
                     available_stations,
                 ) = select_teleseismic_stations_aiming_for_azimuthal_coverage(
-                    available_stations, selected_stations, args.number_stations
+                    available_stations, selected_stations, number_stations
                 )
             else:
                 (
                     selected_stations,
                     available_stations,
                 ) = select_stations_maximizing_distance(
-                    available_stations, selected_stations, args.number_stations
+                    available_stations, selected_stations, number_stations
                 )
 
         added_rows = selected_stations[
@@ -621,8 +626,8 @@ if __name__ == "__main__":
             starttime,
             endtime,
             processed_data=processed_data,
-            output_format=args.store_format,
-            channel=args.channel,
+            output_format=store_format,
+            channel=channel,
         )
 
         retrieved_stations = list(retrieved_waveforms.keys())
@@ -639,7 +644,7 @@ if __name__ == "__main__":
         # required if not enough stations in the inventory
         if not other_available_stations.empty and len(
             available_stations
-        ) < args.number_stations - len(selected_stations):
+        ) < number_stations - len(selected_stations):
             available_stations = gpd.GeoDataFrame(
                 pd.concat(
                     [available_stations, other_available_stations], ignore_index=True
@@ -651,24 +656,23 @@ if __name__ == "__main__":
             print(available_stations)
             other_available_stations = gpd.GeoDataFrame()
 
-        args.number_stations = min(
-            args.number_stations, len(selected_stations) + len(available_stations)
+        number_stations = min(
+            number_stations, len(selected_stations) + len(available_stations)
         )
 
-        if len(selected_stations) == args.number_stations:
+        if len(selected_stations) == number_stations:
             print("done selecting stations")
             print(selected_stations)
             break
 
     generate_station_map(selected_stations, cfg, is_teleseismic)
 
-    # if "{{ stations }}" in config_stations:
-    if False:
+    if "{{ stations }}" in config_stations:
         templateLoader = jinja2.FileSystemLoader(searchpath=os.getcwd())
         templateEnv = jinja2.Environment(loader=templateLoader)
-        template = templateEnv.get_template(args.config_file)
+        template = templateEnv.get_template(config_file)
         outputText = template.render({"stations": ",".join(selected_stations["code"])})
-        out_fname = args.config_file
+        out_fname = config_file
         with open(out_fname, "w") as fid:
             fid.write(outputText)
             print(f"done creating {out_fname}")
@@ -677,3 +681,16 @@ if __name__ == "__main__":
         print("please manually add:")
         station_codes = ",".join(selected_stations["code"])
         print(f"stations = {station_codes}")
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    select_station(
+        args.config_file,
+        args.number_stations,
+        args.closest_stations,
+        args.distance_range,
+        args.channel,
+        args.store_format,
+        args.azimuthal,
+    )
