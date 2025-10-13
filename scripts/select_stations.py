@@ -711,7 +711,8 @@ def select_station(
     if need_update:
         # Save to new YAML file
         out_fname = config_file
-        out_fname = "modified_config.yaml"
+        root, ext = os.path.splitext(config_file)
+        out_fname = "{root}_sources{ext}"
         yaml_dump(cfg.config, out_fname)
 
 
