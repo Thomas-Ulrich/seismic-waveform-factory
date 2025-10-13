@@ -4,16 +4,16 @@ import os
 import random
 
 import geopandas as gpd
-import jinja2
 import numpy as np
 import pandas as pd
 from config_loader import ConfigLoader
 from config_schema import CONFIG_SCHEMA
 from config_utils import (
-    categorize_stations_by_scale,
+    determine_config_scale,
     categorize_waveform_kind_by_scale,
     extract_instaseis_db,
     extract_regional_durations,
+    yaml_dump,
 )
 from fault_processing import compute_shapely_polygon, get_fault_slip_coords
 from geodetic_utils import add_distance_backazimuth_to_df
@@ -28,6 +28,7 @@ from retrieve_waveforms import (
     retrieve_waveforms,
 )
 from scipy import spatial
+from copy import deepcopy
 
 # from waveform_figure_utils import get_station_files_dict
 
@@ -283,6 +284,13 @@ def parse_arguments():
         action="store_true",
         help="Select stations based on back-azimuth instead of distance.",
     )
+    parser.add_argument(
+        "--station_kind",
+        choices=["auto", "regional", "global"],
+        default="auto",
+        type=str,
+        help="kind of stations to select.",
+    )
 
     return parser.parse_args()
 
@@ -398,27 +406,33 @@ def select_station(
     channel,
     store_format,
     azimuthal,
+    station_kind,
 ):
     cfg = ConfigLoader(config_file, CONFIG_SCHEMA)
 
     client_name = cfg["general"]["client"]
     path_observations = cfg["general"]["path_observations"]
-
-    station_codes = categorize_stations_by_scale(cfg)
     waveform_kind = categorize_waveform_kind_by_scale(cfg)
+    config_scale = determine_config_scale(cfg)
 
-    is_teleseismic = True if station_codes["global"] else False
-    if station_codes["global"] and station_codes["regional"]:
-        print(
-            "there are plots with and without instaseis.",
-            "Selecting only teleseismic stations",
-        )
+    if station_kind == "auto":
+        if config_scale["regional"] and config_scale["global"]:
+            raise ValueError(
+                "there are plots with and without instaseis.",
+                "cannot determine station_kind with station_kind == 'auto'",
+            )
+        else:
+            is_teleseismic = config_scale["global"]
+    else:
+        is_teleseismic = station_kind == "global"
+    print(f"station_kind: {station_kind}, is_teleseismic {is_teleseismic}")
 
     key = "global" if is_teleseismic else "regional"
-    kind_vd = waveform_kind[key][0]
+
     assert (
         len(waveform_kind[key]) == 1
     ), f"several waveform kind requested, {waveform_kind[key]}"
+    kind_vd = waveform_kind[key][0]
 
     station_file = cfg["general"]["station_file"]
 
@@ -485,7 +499,7 @@ def select_station(
     client = initialize_client(client_name)
 
     # Define the event parameters
-    event = cfg["general"]["hypocenter"]
+    event = deepcopy(cfg["general"]["hypocenter"])
     event["onset"] = UTCDateTime(event["onset"])
 
     starttime = event["onset"] - t_before
@@ -522,6 +536,7 @@ def select_station(
 
     projection = cfg["general"]["projection"]
     if is_teleseismic:
+        azimuthal = True
         projection = None
 
     available_stations = generate_geopanda_dataframe(
@@ -667,20 +682,37 @@ def select_station(
 
     generate_station_map(selected_stations, cfg, is_teleseismic)
 
-    if "{{ stations }}" in config_stations:
-        templateLoader = jinja2.FileSystemLoader(searchpath=os.getcwd())
-        templateEnv = jinja2.Environment(loader=templateLoader)
-        template = templateEnv.get_template(config_file)
-        outputText = template.render({"stations": ",".join(selected_stations["code"])})
+    dict_teleseismic = {
+        syn["name"]: (syn["type"] == "instaseis") for syn in cfg["synthetics"]
+    }
+    need_update = False
+    for i_plot, wf_plot in enumerate(cfg["waveform_plots"]):
+        if not wf_plot.get("enabled", True):
+            continue
+        global_sta = any(dict_teleseismic[name] for name in wf_plot["synthetics"])
+        if is_teleseismic == global_sta:
+            if len(wf_plot["stations"]) == 0:
+                wf_plot["stations"] = list(selected_stations["code"])
+                print(
+                    f"updating stations in waveform_plots{i_plot} ({wf_plot['type']})"
+                )
+                need_update = True
+            else:
+                print(
+                    (
+                        f"not updating stations in waveform_plots{i_plot}, because ",
+                        f"the station field is already filled: ({wf_plot['stations']})",
+                    )
+                )
+                print("please manually add:")
+                station_codes = ", ".join(selected_stations["code"])
+                print(f"stations = [{station_codes}]")
+
+    if need_update:
+        # Save to new YAML file
         out_fname = config_file
-        with open(out_fname, "w") as fid:
-            fid.write(outputText)
-            print(f"done creating {out_fname}")
-    else:
-        print("no {{ stations }} field in the GENERAL/stations in the config file")
-        print("please manually add:")
-        station_codes = ",".join(selected_stations["code"])
-        print(f"stations = {station_codes}")
+        out_fname = "modified_config.yaml"
+        yaml_dump(cfg.config, out_fname)
 
 
 if __name__ == "__main__":
@@ -693,4 +725,5 @@ if __name__ == "__main__":
         args.channel,
         args.store_format,
         args.azimuthal,
+        args.station_kind,
     )

@@ -48,10 +48,24 @@ class ConfigLoader:
                     )
             return value
 
+        def when_condition_met(when_rules, context):
+            """
+            Evaluate 'when' condition dict (e.g. {'type': 'instaseis'})
+            against the current context dictionary (the enclosing section).
+            """
+            for key, required_value in when_rules.items():
+                current_value = context.get(key)
+                if isinstance(required_value, list):
+                    if current_value not in required_value:
+                        return False
+                else:
+                    if current_value != required_value:
+                        return False
+            return True
+
         def validate_section(section_name, schema, data):
             expected_type = schema.get("type")
             sub_schema = schema.get("schema")
-
             # Fill defaults
             if data is None:
                 if expected_type == dict:
@@ -77,6 +91,11 @@ class ConfigLoader:
                     )
 
                 for key, rules in sub_schema.items():
+                    when_rules = rules.get("when")
+                    if when_rules and not when_condition_met(when_rules, data):
+                        # skip validation — not applicable in this context
+                        continue
+
                     value = data.get(key, rules.get("default"))
                     validated[key] = validate_section(
                         f"{section_name}.{key}", rules, value
