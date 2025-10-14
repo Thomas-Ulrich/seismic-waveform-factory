@@ -186,26 +186,27 @@ class WaveformFigureGenerator:
             sharey=False,
             squeeze=False,
         )
+
         for j in range(ncol):
             for i in range(nrow):
                 axi = axarr[i, j]
                 if self.plt_cfg["normalize"]:
-                    axi.set_yticks([])
+                    axi.spines["left"].set_visible(False)
                 if j > 0 and generic_plot:
                     axi.sharey(axarr[i, 0])
-                    axi.set_yticks([])
                     axi.spines["left"].set_visible(False)
+                    axi.yaxis.set_visible(False)
                 remove_top_right_axes(axi)
                 axi.tick_params(axis="x", zorder=3)
                 if i < nrow - 1 and generic_plot and self.time_shared:
                     axi.spines["bottom"].set_visible(False)
-                    axi.set_xticks([])
+                    axi.xaxis.set_visible(False)
                 if j * nrow + i >= self.ncomp * nstations:
                     axi.spines["left"].set_visible(False)
-                    axi.set_yticks([])
+                    axi.yaxis.set_visible(False)
                     if self.time_shared:
                         axi.spines["bottom"].set_visible(False)
-                        axi.set_xticks([])
+                        axi.xaxis.set_visible(False)
         self.fig, self.axarr = fig, axarr
 
     def add_global_legend(self):
