@@ -597,9 +597,7 @@ def select_stations(
         print("closest_stations <= number_stations")
         closest_stations = number_stations
 
-
     while len(selected_stations) < number_stations:
-
         previous_selected = selected_stations.copy()
 
         # 1 Select new candidate stations
@@ -609,7 +607,10 @@ def select_stations(
             )
 
         elif azimuthal:
-            selected_stations, available_stations = select_teleseismic_stations_aiming_for_azimuthal_coverage(
+            (
+                selected_stations,
+                available_stations,
+            ) = select_teleseismic_stations_aiming_for_azimuthal_coverage(
                 available_stations, selected_stations, number_stations
             )
         else:
@@ -625,7 +626,9 @@ def select_stations(
 
         # 3 Retrieve data
         net_sta_dict = compute_dict_network_station(new_rows)
-        network_station = [f"{net}.{sta}" for net, stas in net_sta_dict.items() for sta in stas]
+        network_station = [
+            f"{net}.{sta}" for net, stas in net_sta_dict.items() for sta in stas
+        ]
 
         retrieved_waveforms = retrieve_waveforms(
             network_station,
@@ -640,30 +643,40 @@ def select_stations(
         )
 
         retrieved_codes = list(retrieved_waveforms.keys())
-        retrieved_rows = selected_stations[selected_stations["code"].isin(retrieved_codes)]
+        retrieved_rows = selected_stations[
+            selected_stations["code"].isin(retrieved_codes)
+        ]
 
         # 4 Keep only retrieved rows
-        selected_stations = pd.concat([previous_selected, retrieved_rows], ignore_index=True)
+        selected_stations = pd.concat(
+            [previous_selected, retrieved_rows], ignore_index=True
+        )
         print("Current selected stations:\n", selected_stations)
 
         # 5 If we run out of available stations, merge with "other" pool
         remaining_needed = number_stations - len(selected_stations)
-        if not other_available_stations.empty and len(available_stations) < remaining_needed:
+        if (
+            not other_available_stations.empty
+            and len(available_stations) < remaining_needed
+        ):
             print("Adding other available stations")
             available_stations = gpd.GeoDataFrame(
-                pd.concat([available_stations, other_available_stations], ignore_index=True)
+                pd.concat(
+                    [available_stations, other_available_stations], ignore_index=True
+                )
             )
             other_available_stations = gpd.GeoDataFrame()
 
         # 6 Adjust number_stations in case available list shrinks
-        number_stations = min(number_stations, len(selected_stations) + len(available_stations))
+        number_stations = min(
+            number_stations, len(selected_stations) + len(available_stations)
+        )
 
         # 7 top if enough stations are selected
         if len(selected_stations) >= number_stations:
             print("Done selecting stations")
             print(selected_stations)
             break
-
 
     generate_station_map(selected_stations, cfg, is_teleseismic)
 
