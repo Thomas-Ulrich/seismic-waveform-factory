@@ -398,7 +398,7 @@ def compute_min_max_coords(fault_info):
     return (min(xs), max(xs)), (min(ys), max(ys))
 
 
-def select_station(
+def select_stations(
     config_file,
     number_stations,
     closest_stations,
@@ -546,12 +546,12 @@ def select_station(
 
     if projection:
         # 60 closest stations are written for seissol output
-        closest_stations = available_stations.head(60)
+        s_closest_stations = available_stations.head(60)
         transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
         x1, y1 = transformer.transform(
-            closest_stations["longitude"], closest_stations["latitude"]
+            s_closest_stations["longitude"], s_closest_stations["latitude"]
         )
-        n_seissol_station = len(closest_stations)
+        n_seissol_station = len(s_closest_stations)
         nstations_in_file = [n_seissol_station]
         if n_seissol_station > 5:
             nstations_in_file.append(5)
@@ -592,46 +592,40 @@ def select_station(
     # initialize empty df
     selected_stations = pd.DataFrame(columns=available_stations.columns)
 
-    while True:
-        if closest_stations and selected_stations.empty:
-            if closest_stations <= number_stations:
-                print("closest_stations <= number_stations")
-                closest_stations = number_stations
-            previous_selected_stations = selected_stations.copy()
+    # If we have "closest_stations" constraint, ensure it's at least number_stations
+    if closest_stations and closest_stations < number_stations:
+        print("closest_stations <= number_stations")
+        closest_stations = number_stations
+
+
+    while len(selected_stations) < number_stations:
+
+        previous_selected = selected_stations.copy()
+
+        # 1 Select new candidate stations
+        if len(selected_stations) < closest_stations:
             selected_stations, available_stations = select_closest_stations(
                 available_stations, selected_stations, closest_stations
             )
+
+        elif azimuthal:
+            selected_stations, available_stations = select_teleseismic_stations_aiming_for_azimuthal_coverage(
+                available_stations, selected_stations, number_stations
+            )
         else:
-            previous_selected_stations = selected_stations.copy()
-            if azimuthal:
-                (
-                    selected_stations,
-                    available_stations,
-                ) = select_teleseismic_stations_aiming_for_azimuthal_coverage(
-                    available_stations, selected_stations, number_stations
-                )
-            else:
-                (
-                    selected_stations,
-                    available_stations,
-                ) = select_stations_maximizing_distance(
-                    available_stations, selected_stations, number_stations
-                )
+            selected_stations, available_stations = select_stations_maximizing_distance(
+                available_stations, selected_stations, number_stations
+            )
 
-        added_rows = selected_stations[
-            ~selected_stations["code"].isin(previous_selected_stations["code"])
+        # 2 Determine newly added stations
+        new_rows = selected_stations[
+            ~selected_stations["code"].isin(previous_selected["code"])
         ]
-        print("selection:\n", selected_stations)
-        print("added:\n", added_rows)
-        print("available:\n", available_stations)
+        print("Added stations:\n", new_rows)
 
-        network_station = compute_dict_network_station(added_rows)
-        # transform the dictionnary in a list of strings "network.station"
-        network_station = [
-            f"{key}.{value}"
-            for key, values in network_station.items()
-            for value in values
-        ]
+        # 3 Retrieve data
+        net_sta_dict = compute_dict_network_station(new_rows)
+        network_station = [f"{net}.{sta}" for net, stas in net_sta_dict.items() for sta in stas]
 
         retrieved_waveforms = retrieve_waveforms(
             network_station,
@@ -645,40 +639,31 @@ def select_station(
             channel=channel,
         )
 
-        retrieved_stations = list(retrieved_waveforms.keys())
-        print("retrieved_stations", retrieved_stations)
-        added_rows = selected_stations[
-            selected_stations["code"].isin(retrieved_stations)
-        ]
-        print("retrieved rows", added_rows)
-        selected_stations = pd.concat(
-            [previous_selected_stations, added_rows], ignore_index=True
-        )
-        print("new selected_stations", selected_stations)
+        retrieved_codes = list(retrieved_waveforms.keys())
+        retrieved_rows = selected_stations[selected_stations["code"].isin(retrieved_codes)]
 
-        # required if not enough stations in the inventory
-        if not other_available_stations.empty and len(
-            available_stations
-        ) < number_stations - len(selected_stations):
+        # 4 Keep only retrieved rows
+        selected_stations = pd.concat([previous_selected, retrieved_rows], ignore_index=True)
+        print("Current selected stations:\n", selected_stations)
+
+        # 5 If we run out of available stations, merge with "other" pool
+        remaining_needed = number_stations - len(selected_stations)
+        if not other_available_stations.empty and len(available_stations) < remaining_needed:
+            print("Adding other available stations")
             available_stations = gpd.GeoDataFrame(
-                pd.concat(
-                    [available_stations, other_available_stations], ignore_index=True
-                )
+                pd.concat([available_stations, other_available_stations], ignore_index=True)
             )
-            print("print adding first discarded other available stations")
-            print(other_available_stations)
-            print("available_stations is now:")
-            print(available_stations)
             other_available_stations = gpd.GeoDataFrame()
 
-        number_stations = min(
-            number_stations, len(selected_stations) + len(available_stations)
-        )
+        # 6 Adjust number_stations in case available list shrinks
+        number_stations = min(number_stations, len(selected_stations) + len(available_stations))
 
-        if len(selected_stations) == number_stations:
-            print("done selecting stations")
+        # 7 top if enough stations are selected
+        if len(selected_stations) >= number_stations:
+            print("Done selecting stations")
             print(selected_stations)
             break
+
 
     generate_station_map(selected_stations, cfg, is_teleseismic)
 
@@ -712,13 +697,13 @@ def select_station(
         # Save to new YAML file
         out_fname = config_file
         root, ext = os.path.splitext(config_file)
-        out_fname = "{root}_sources{ext}"
+        out_fname = f"{root}_sources{ext}"
         yaml_dump(cfg.config, out_fname)
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    select_station(
+    select_stations(
         args.config_file,
         args.number_stations,
         args.closest_stations,

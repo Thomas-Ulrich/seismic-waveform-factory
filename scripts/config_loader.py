@@ -55,7 +55,7 @@ class ConfigLoader:
             """
             for key, required_value in when_rules.items():
                 current_value = context.get(key)
-                if isinstance(required_value, list):
+                if isinstance(required_value, (list, tuple)):
                     if current_value not in required_value:
                         return False
                 else:

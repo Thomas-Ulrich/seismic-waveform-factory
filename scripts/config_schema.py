@@ -170,7 +170,7 @@ CONFIG_SCHEMA = {
             "mode": {
                 "default": "classical",
                 "type": str,
-                "choices": ["classical", "green_function"],
+                "choices": ["classical", "green_functions"],
                 "doc": "Mode for generating Instaseis synthetics.",
                 "when": {"type": "instaseis"},
             },
