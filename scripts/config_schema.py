@@ -64,7 +64,7 @@ CONFIG_SCHEMA = {
                 "doc": "Optional csv file containing station information.",
             },
             "client": {
-                "default": "iris",
+                "default": "earthscope",
                 "type": str,
                 "doc": "obspy client name to retrieve station data",
             },

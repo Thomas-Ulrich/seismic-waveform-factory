@@ -70,14 +70,11 @@ for wf_syn_config in cfg["synthetics"]:
     source_files = collect_synthetic_source_files(wf_syn_config)
     wf_syn_config["source_files"] = source_files
 
-    if wf_syn_config["type"] == "seissol":
-        assert len(wf_syn_config["source_files"]) == 0
-    if wf_syn_config["type"] != "seissol":
-        assert len(wf_syn_config["outputs"]) == 0
-
     syn_name = wf_syn_config["name"]
-    n_syn_model[syn_name] = len(wf_syn_config["source_files"]) + len(
-        wf_syn_config["outputs"]
+    n_syn_model[syn_name] = (
+        len(wf_syn_config["source_files"])
+        if wf_syn_config["type"] != "seissol"
+        else len(wf_syn_config["outputs"])
     )
 
 
@@ -263,9 +260,14 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
         )
     else:
         raise ValueError("unknown synthetics type {syn_type}")
-    duration = (
-        list_synthetics[0][0].stats.endtime - list_synthetics[0][0].stats.starttime
-    )
+    try:
+        duration = (
+            list_synthetics[0][0].stats.endtime - list_synthetics[0][0].stats.starttime
+        )
+    except IndexError:
+        # todo change hardcoded
+        duration = 3600.0
+
     return list_synthetics, duration
 
 
@@ -350,44 +352,50 @@ for wf_plot in wf_plots:
         for wf_syn_config in cfg["synthetics"]:
             name = wf_syn_config["name"]
             if wf_syn_config["name"] in syn_names:
-                pt_sources = wf_syn_config["source_files"] + wf_syn_config["outputs"]
+                pt_sources = wf_syn_config.get("source_files") or wf_syn_config.get(
+                    "outputs", []
+                )
                 src.extend([(name, pt_source) for pt_source in pt_sources])
         src_loop_up[f"{wf_plot.plt_id}"] = pt_sources
 print(src_loop_up)
 
 print("goodness of fit (gof) per station:")
 df_merged = merge_gof_dfs(wf_plots)
-print(df_merged)
 
-fname = "gof_per_station.pkl"
-df_merged.to_pickle(fname)
-print(f"done writing {fname}")
+if list(df_merged.columns) == ["station"]:
+    print("not computing gof_per_station as df_merged is empty")
+else:
+    fname = "gof_per_station.pkl"
+    df_merged.to_pickle(fname)
+    print(f"done writing {fname}")
 
-df_merged.drop(columns=["station"], inplace=True)
+    df_merged.drop(columns=["station"], inplace=True)
 
-df_station_average = df_merged.mean(axis=0).to_frame(name="gofa").reset_index()
-df_station_average = df_station_average.rename(columns={"index": "gofa_name"})
-file_id = (
-    df_station_average["gofa_name"].str.extract(r"(\d+)$", expand=False).astype(int)
-)
-plot_id = (
-    df_station_average["gofa_name"].str.extract(r"(\d+)", expand=False).astype(int)
-)
-df_station_average["plot_id"] = plot_id
-point_srcs = [src_loop_up[f"{p_id}"][f_id] for (p_id, f_id) in zip(plot_id, file_id)]
-df_station_average["src"] = point_srcs
+    df_station_average = df_merged.mean(axis=0).to_frame(name="gofa").reset_index()
+    df_station_average = df_station_average.rename(columns={"index": "gofa_name"})
+    file_id = (
+        df_station_average["gofa_name"].str.extract(r"(\d+)$", expand=False).astype(int)
+    )
+    plot_id = (
+        df_station_average["gofa_name"].str.extract(r"(\d+)", expand=False).astype(int)
+    )
+    df_station_average["plot_id"] = plot_id
+    point_srcs = [
+        src_loop_up[f"{p_id}"][f_id] for (p_id, f_id) in zip(plot_id, file_id)
+    ]
+    df_station_average["src"] = point_srcs
 
-df_station_average["dyn_id"] = (
-    df_station_average["src"].str.extract(r"dyn_(\d+)", expand=False).astype(int)
-)
+    df_station_average["dyn_id"] = (
+        df_station_average["src"].str.extract(r"dyn_(\d+)", expand=False).astype(int)
+    )
 
-print("average across all stations gof:")
-print(df_station_average)
+    print("average across all stations gof:")
+    print(df_station_average)
 
-setup_name = cfg["general"]["setup_name"]
-fname = f"gof_{setup_name}_waveforms_average.pkl"
-df_station_average.to_pickle(fname)
-print(f"done writing {fname}")
+    setup_name = cfg["general"]["setup_name"]
+    fname = f"gof_{setup_name}_waveforms_average.pkl"
+    df_station_average.to_pickle(fname)
+    print(f"done writing {fname}")
 
 if not os.path.exists("plots"):
     os.makedirs("plots")

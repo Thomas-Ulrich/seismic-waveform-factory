@@ -359,11 +359,18 @@ def _retrieve_waveforms(
             code = f"{network}.{station.code}"
             print(f"requesting waveform data for {network}.{station.code}")
             channels = [channel.code for channel in station]
-
+            print("available channels", channels)
+            kargs = {
+                "client": client,
+                "network": network,
+                "station": station.code,
+                "selected_band": selected_channels,
+                "t1": t1,
+                "t2": t2,
+            }
+            print(kargs)
             # Get waveforms for all channels
-            st_obs0 = get_waveforms(
-                client, network, station.code, selected_channels, t1, t2
-            )
+            st_obs0 = get_waveforms(**kargs)
             if not st_obs0:
                 continue
 
