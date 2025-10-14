@@ -45,6 +45,8 @@ print(cfg["general"]["setup_name"])
 def collect_synthetic_source_files(wf_syn_config):
     source_files = []
     all_files = []
+    if "source_files" not in wf_syn_config.keys():
+        return source_files
     for source_file in wf_syn_config["source_files"]:
         if os.path.isfile(source_file):
             if source_file.endswith(".h5"):
