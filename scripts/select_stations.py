@@ -84,7 +84,6 @@ def remove_synthetics_from_inventory(original_inv):
 def generate_geopanda_dataframe(df_stations, event, fault_info=None, projection=None):
     """Return a GeoDataFrame of stations with distances (km) to fault or hypocenter."""
     records = []
-    print(df_stations, event, fault_info, projection)
     transformer = (
         Transformer.from_crs("epsg:4326", projection, always_xy=True)
         if projection
@@ -107,7 +106,6 @@ def generate_geopanda_dataframe(df_stations, event, fault_info=None, projection=
             dist = -1.0
         else:
             x, y = transformer.transform(row.longitude, row.latitude)
-            print(x, y)
             xyz = np.array([x, y, 0]) / 1e3
             dist = (
                 tree.query(xyz)[0] if fault_info else np.linalg.norm(xyz - hypo_coords)
@@ -136,10 +134,9 @@ def generate_geopanda_dataframe(df_stations, event, fault_info=None, projection=
 
 def select_closest_stations(available_stations, selected_stations, nstations):
     """Return updated DataFrames of selected and remaining stations."""
-    if selected_stations.empty:
-        print("selected_stations is empty; selecting the closest stations.")
-        selected_stations = available_stations.head(nstations)
-        available_stations = available_stations.iloc[nstations:]
+    new_stations = available_stations.head(nstations)
+    available_stations = available_stations.iloc[nstations:]
+    selected_stations = pd.concat([selected_stations, new_stations])
 
     return selected_stations.sort_index(), available_stations.sort_index()
 
@@ -532,7 +529,6 @@ def select_stations(
             print("did not remove AM network, else too no enough stations remaining")
 
         station_df = generate_station_df(inventory)
-    print(station_df)
 
     projection = cfg["general"]["projection"]
     if is_teleseismic:
@@ -542,6 +538,7 @@ def select_stations(
     available_stations = generate_geopanda_dataframe(
         station_df, event, fault_info, projection
     )
+    print("available_stations:")
     print(available_stations)
 
     if projection:
@@ -592,21 +589,29 @@ def select_stations(
     # initialize empty df
     selected_stations = pd.DataFrame(columns=available_stations.columns)
 
-    # If we have "closest_stations" constraint, ensure it's at least number_stations
-    if closest_stations and closest_stations < number_stations:
-        print("closest_stations <= number_stations")
-        closest_stations = number_stations
-
+    iteration = 0
     while len(selected_stations) < number_stations:
+        iteration += 1
+        print(f"iteration {iteration}")
+        if iteration > 30:
+            raise ("reaching iteration 30, probably something went wrong")
+
         previous_selected = selected_stations.copy()
+
+        # If we have "closest_stations" constraint, ensure it's at least number_stations
+        if closest_stations and number_stations < closest_stations:
+            print("closest_stations <= number_stations")
+            closest_stations = number_stations
 
         # 1 Select new candidate stations
         if len(selected_stations) < closest_stations:
+            print("selecting nearest stations")
             selected_stations, available_stations = select_closest_stations(
                 available_stations, selected_stations, closest_stations
             )
 
         elif azimuthal:
+            print("selecting stations aiming for azimuthal and distance coverage")
             (
                 selected_stations,
                 available_stations,
@@ -614,6 +619,7 @@ def select_stations(
                 available_stations, selected_stations, number_stations
             )
         else:
+            print("selecting stations maximizing distance")
             selected_stations, available_stations = select_stations_maximizing_distance(
                 available_stations, selected_stations, number_stations
             )
