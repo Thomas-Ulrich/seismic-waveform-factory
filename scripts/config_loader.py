@@ -121,7 +121,7 @@ class ConfigLoader:
                 elif "element_type" in schema:  # list of scalars
                     elem_type = schema["element_type"]
                     for i, item in enumerate(data):
-                        item = check_type(section_name[i], item, elem_type)
+                        item = check_type(f"{section_name}[{i}]", item, elem_type)
                         validated.append(item)
                 else:
                     validated = data
