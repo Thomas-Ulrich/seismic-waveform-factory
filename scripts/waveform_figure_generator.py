@@ -289,6 +289,11 @@ class WaveformFigureGenerator:
 
         if "T" in self.components:
             for st in [*lst_copy, st_obs]:
+                # Handle very rare error before rotating
+                # ValueError: All components need to have the same time span.
+                t1 = max(tr.stats.starttime for tr in st)
+                t2 = min(tr.stats.endtime for tr in st)
+                st.trim(starttime=t1, endtime=t2, pad=True, fill_value=0)
                 st.rotate(method="NE->RT")
 
         if "f" in self.components or "o" in self.components:

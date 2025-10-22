@@ -387,8 +387,11 @@ else:
     ]
     df_station_average["src"] = point_srcs
 
-    df_station_average["dyn_id"] = (
-        df_station_average["src"].str.extract(r"dyn_(\d+)", expand=False).astype(int)
+    df_station_average["sim_id"] = (
+        df_station_average["src"]
+        .str.extract(r"dyn_(\d+)", expand=False)
+        .fillna(-1)  # fallback when regex fails
+        .astype(int)
     )
 
     print("average across all stations gof:")
