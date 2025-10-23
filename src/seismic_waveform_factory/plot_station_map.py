@@ -25,6 +25,7 @@ from seismic_waveform_factory.waveform.retrieve import initialize_client
 
 def retrieve_coordinates(cfg, station_codes):
     path_observations = cfg["general"]["path_observations"]
+    os.makedirs(path_observations, exist_ok=True)
 
     rows = []
     fn_inventories = glob.glob(os.path.join(path_observations, "*.xml"))
@@ -50,7 +51,8 @@ def retrieve_coordinates(cfg, station_codes):
     missing = [code for code in station_codes if code not in df["code"].values]
     if missing:
         print(f"{missing} locations not found in inventory files:\n{fn_inventories}")
-        client = initialize_client(cfg["general"]["client"])
+        client_name = cfg["general"]["client"]
+        client = initialize_client(client_name)
         event_time = UTCDateTime(cfg["general"]["hypocenter"]["onset"])
         networks = set([entry.split(".")[0] for entry in missing])
         inv = Inventory()
@@ -63,6 +65,7 @@ def retrieve_coordinates(cfg, station_codes):
                 endtime=event_time + 100,
                 includeavailability=True,
             )
+            fn_inventory = f"{path_observations}/inv_{client_name}.xml"
             inventory.write(fn_inventory, format="STATIONXML")
             inv.extend(inventory)
 

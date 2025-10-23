@@ -11,7 +11,7 @@ general:
   line_colors: [grey, r, b, pink, g]
   line_widths: [1.0]
   path_observations: ./regional_observations
-  fault_file: output/dyn-kinmod-fault.xdmf
+  fault_file: output/dyn-kinmod_extractedlast-fault.xdmf
   misfit: cross-correlation
 synthetics:
   - type: seissol

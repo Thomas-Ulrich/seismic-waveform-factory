@@ -33,7 +33,7 @@ stations = {}
 for station in station_list:
     net, sta = station.split(".")
     # Find response file
-    response_file = glob.glob(f"{waveform_folder}{net}_{sta}_response.xml")
+    response_file = glob.glob(f"{waveform_folder}/{net}_{sta}_response.xml")
     if not response_file:
         print(f"Warning: No response found for {station}")
         continue

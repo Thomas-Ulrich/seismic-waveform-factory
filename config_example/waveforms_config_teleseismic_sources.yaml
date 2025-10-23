@@ -6,11 +6,11 @@ general:
   global_legend_labels: []
   projection: +proj=tmerc +datum=WGS84 +k=0.9996 +lon_0=78.65 +lat_0=41.26
   hypocenter: {lon: 78.6538, lat: 41.2555, depth_in_km: 13.0, onset: '2024-01-22T18:09:04.340Z'}
-  client: earthscope
+  client: iris
   line_colors: [grey, r, b, pink, g]
   line_widths: [1.0]
   path_observations: ./global_observations
-  fault_file: output/dyn-kinmod-fault.xdmf
+  fault_file: output/dyn-kinmod_extractedlast-fault.xdmf
   misfit: cross-correlation
 synthetics:
   - type: instaseis

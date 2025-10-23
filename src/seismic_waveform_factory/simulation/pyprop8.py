@@ -39,7 +39,7 @@ def create_pyprop8_source_list_from_h5(filename):
         xyz = h5f["xyz"][:, :]
         moment_tensors = h5f["moment_tensors"][:, :]
         dt = h5f["dt"][0]
-        assert h5f.attrs["coordinates_convention"] == b"geographic"
+        assert h5f.attrs["coordinates_convention"] == "geographic"
 
     latlon = True
     if not latlon:
