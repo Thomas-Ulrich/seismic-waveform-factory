@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import configparser
 import glob
 import os
 import shutil
+from config_loader import ConfigLoader
+from config_schema import CONFIG_SCHEMA
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -18,12 +19,17 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    config = configparser.ConfigParser()
-    assert os.path.isfile(args.config_file), f"{args.config_file} not found"
-    config.read(args.config_file)
+    cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
 
-    station_codes = config.get("GENERAL", "stations").split(",")
-    path_observations = config.get("GENERAL", "path_observations")
+    station_codes = set()
+    for plt_id, wf_plot_config in enumerate(cfg["waveform_plots"]):
+        if wf_plot_config["enabled"]:
+            for code in wf_plot_config["stations"]:
+                station_codes.add(code)
+    station_codes = list(station_codes)
+
+    path_observations = cfg["general"]["path_observations"]
+
     dest_folder = args.output_folder
     os.makedirs(dest_folder, exist_ok=True)
     all_files = []

@@ -94,73 +94,74 @@ def add_fault_components(streams, fault_strike):
     return streams
 
 
-class WaveformFigureGenerator:
-    def __init__(
-        self,
-        signal_kind,
-        nstations,
-        n_kinematic_models,
-        kind_misfit,
-        colors,
-        line_widths,
-        scaling,
-        normalize,
-        shift_match_correlation,
-        relative_offset,
-        annotations,
-        global_legend_labels,
-        t_before,
-        t_after,
-        taper,
-        filter_fmin,
-        filter_fmax,
-        enabled,
-        ncol_per_component,
-        components,
-        fault_strike,
-    ):
-        mapping = {"normal": "o", "parallel": "f"}
+def get_station_value(cfg_entry, key, station):
+    val = cfg_entry.get(key)
+    if isinstance(val, dict):
+        return val.get(station, val.get("default"))
+    return val
 
-        components = [mapping.get(c, c) for c in components]
-        self.components = components
-        self.signal_kind = signal_kind
-        self.t_before = t_before
-        self.t_after = t_after
-        self.taper = taper
-        self.filter_fmin = filter_fmin
-        self.filter_fmax = filter_fmax
-        self.enabled = enabled
-        self.ncol_per_component = ncol_per_component
+
+class WaveformFigureGenerator:
+    def __init__(self, general_cfg, plt_cfg, n_kinematic_models, plt_id):
+        mapping = {"normal": "o", "parallel": "f"}
+        self.components = [mapping.get(c, c) for c in plt_cfg["components"]]
+        self.fault_strike = plt_cfg["fault_strike"]
+        if "o" in self.components or "f" in self.components:
+            assert self.fault_strike is not None, (
+                "fault_strike parameter required for components='f' or 'o'"
+                "(fault-parallel and normal)"
+            )
+        self.gen_cfg = general_cfg
+        self.plt_cfg = plt_cfg
+        self.plt_id = plt_id
+        self.plot_type = plt_cfg["type"]
+        self.signal_kind = plt_cfg["kind"]
+
+        self.time_shared = (
+            False
+            if isinstance(plt_cfg["t_before"], dict)
+            or isinstance(plt_cfg["t_after"], dict)
+            else True
+        )
+
+        self.t_before = {}
+        self.t_after = {}
+
+        for code in plt_cfg["stations"]:
+            self.t_before[code] = -get_station_value(plt_cfg, "t_before", code)
+            self.t_after[code] = get_station_value(plt_cfg, "t_after", code)
+
+        self.filter_fmin = 1.0 / plt_cfg["filter_tmax"]
+        self.filter_fmax = 1.0 / plt_cfg["filter_tmin"]
+        self.enabled = plt_cfg["enabled"]
+        self.ncol_per_component = plt_cfg["ncol_per_component"]
         self.ncomp = len(self.components)
-        self.normalize = normalize
-        self.shift_match_correlation = shift_match_correlation
+        self.shift_match_correlation = plt_cfg["shift_match_correlation"]
+        nstations = len(plt_cfg["stations"])
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
-        assert kind_misfit in [
-            "cross-correlation",
-            "normalized_rms",
-            "min_shifted_normalized_rms",
-            "time-frequency",
-        ]
-        self.kind_misfit = kind_misfit
+        if plt_cfg["misfit"] == "auto":
+            self.kind_misfit = general_cfg["misfit"]
+        else:
+            self.kind_misfit = plt_cfg["misfit"]
         self.init_gof_pandas_df()
-        self.scaling = scaling
-        self.colors = colors
-        self.line_widths = line_widths
-        self.relative_offset = relative_offset
-        self.annotations = annotations
-        self.global_legend_labels = global_legend_labels
+        self.scaling = plt_cfg["scaling"]
+        self.colors = general_cfg["line_colors"]
+        self.line_widths = general_cfg["line_widths"]
+        self.relative_offset = general_cfg["relative_offset"]
+        self.annotations = plt_cfg["annotations"]
+        self.global_legend_labels = general_cfg["global_legend_labels"]
         self.estimated_travel_time = 0.0
-        self.fault_strike = fault_strike
 
     def init_gof_pandas_df(self):
+        gof_pref = f"{self.plot_type[0]}{self.plt_id}"
         columns = ["station", "distance", "azimuth"]
         if len(self.components) > 1:
             prefix = "".join(self.components)
             for i in range(self.n_kinematic_models):
-                columns += [f"{self.signal_kind}_{prefix}{i}"]
+                columns += [f"{gof_pref}_{prefix}{i}"]
         for i in range(self.n_kinematic_models):
-            columns += [f"{self.signal_kind}_{comp}{i}" for comp in self.components]
+            columns += [f"{gof_pref}_{comp}{i}" for comp in self.components]
         self.gof_df = pd.DataFrame(columns=columns)
 
     def set_estimated_travel_time(self, travel_time):
@@ -170,7 +171,7 @@ class WaveformFigureGenerator:
         nrow = int(np.ceil(nstations / self.ncol_per_component))
         ncol = self.ncol_per_component * self.ncomp
         # for comparing signals on the same figure
-        if self.signal_kind in ["P", "SH"]:
+        if self.plot_type in ["p", "sh"]:
             height_one_plot = 1.7
             generic_plot = False
         else:
@@ -185,25 +186,27 @@ class WaveformFigureGenerator:
             sharey=False,
             squeeze=False,
         )
+
         for j in range(ncol):
             for i in range(nrow):
                 axi = axarr[i, j]
-                if self.normalize:
-                    axi.set_yticks([])
+                if self.plt_cfg["normalize"]:
+                    axi.spines["left"].set_visible(False)
                 if j > 0 and generic_plot:
                     axi.sharey(axarr[i, 0])
-                    axi.set_yticks([])
                     axi.spines["left"].set_visible(False)
+                    axi.yaxis.set_visible(False)
                 remove_top_right_axes(axi)
                 axi.tick_params(axis="x", zorder=3)
-                if i < nrow - 1 and generic_plot:
+                if i < nrow - 1 and generic_plot and self.time_shared:
                     axi.spines["bottom"].set_visible(False)
-                    axi.set_xticks([])
+                    axi.xaxis.set_visible(False)
                 if j * nrow + i >= self.ncomp * nstations:
                     axi.spines["left"].set_visible(False)
-                    axi.spines["bottom"].set_visible(False)
-                    axi.set_xticks([])
-                    axi.set_yticks([])
+                    axi.yaxis.set_visible(False)
+                    if self.time_shared:
+                        axi.spines["bottom"].set_visible(False)
+                        axi.xaxis.set_visible(False)
         self.fig, self.axarr = fig, axarr
 
     def add_global_legend(self):
@@ -236,7 +239,8 @@ class WaveformFigureGenerator:
     def compute_max_abs_value_trace(self, trace, reftime):
         max_abs_value = float("-inf")
         times = trace.times(reftime=reftime)
-        mask = (times >= self.t_before) & (times <= self.t_after)
+        code = f"{trace.stats.network}.{trace.stats.station}"
+        mask = (times >= self.t_before[code]) & (times <= self.t_after[code])
         filtered_data = trace.data[mask]
         if filtered_data.size > 0:
             max_abs_value = max(np.max(filtered_data), -np.min(filtered_data))
@@ -263,13 +267,13 @@ class WaveformFigureGenerator:
 
     def compute_scaling(self, trace, reftime):
         annot = ""
-        if self.normalize:
+        if self.plt_cfg["normalize"]:
             stmax = self.compute_max_abs_value_trace(trace, reftime)
             annot = f"{stmax:.2}"
             if stmax <= 0:
                 stmax = 1.0
             scaling = 1 / stmax if stmax != 0.0 else 1.0
-        elif self.signal_kind in ["P", "SH"]:
+        elif self.plot_type in ["p", "sh"]:
             # micro meters (/s if velocity)
             scaling = 1e6
         else:
@@ -285,6 +289,11 @@ class WaveformFigureGenerator:
 
         if "T" in self.components:
             for st in [*lst_copy, st_obs]:
+                # Handle very rare error before rotating
+                # ValueError: All components need to have the same time span.
+                t1 = max(tr.stats.starttime for tr in st)
+                t2 = min(tr.stats.endtime for tr in st)
+                st.trim(starttime=t1, endtime=t2, pad=True, fill_value=0)
                 st.rotate(method="NE->RT")
 
         if "f" in self.components or "o" in self.components:
@@ -293,9 +302,9 @@ class WaveformFigureGenerator:
 
         st_obs = st_obs.split()
         for myst in [*lst_copy, st_obs]:
-            myst.detrend("demean")
-            myst.detrend("linear")
-            if self.taper:
+            if self.plt_cfg["taper"]:
+                myst.detrend("demean")
+                myst.detrend("linear")
                 myst.taper(max_percentage=0.05, type="hann")
             myst.filter(
                 "bandpass",
@@ -305,7 +314,7 @@ class WaveformFigureGenerator:
                 zerophase=True,
             )
         st_obs.merge()
-        if self.normalize:
+        if self.plt_cfg["normalize"]:
             offset = self.relative_offset
         else:
             offset = (
@@ -320,12 +329,12 @@ class WaveformFigureGenerator:
             return j + ista // nrows
 
         ylabel = f"{network}.{station}"
-        if self.signal_kind == "generic":
+        if self.plot_type == "generic":
             self.axarr[ins, 0].set_ylabel(ylabel)
 
         for j, comp in enumerate(self.components):
             j0 = compute_j0(j)
-            if self.signal_kind in ["P", "SH"]:
+            if self.plot_type in ["p", "sh"]:
                 self.axarr[ins, j0].set_ylabel(ylabel)
             vmax_annot = []
             nst = len(lst_copy) + 1
@@ -359,15 +368,20 @@ class WaveformFigureGenerator:
                 "k",
                 linewidth=self.line_widths[ist],
             )
-            self.axarr[ins, j0].set_xlim([self.t_before, self.t_after])
+            code = f"{otrace.stats.network}.{otrace.stats.station}"
+            self.axarr[ins, j0].set_xlim([self.t_before[code], self.t_after[code]])
             # rescale to view range
             if len(self.components) == 1:
                 autoscale_y(self.axarr[ins, j0])
 
         # Compute rMRS misfit and print it on plot
-        dist = otrace.stats.distance
-        distance_unit = otrace.stats.distance_unit
-        distance_unit = "°" if distance_unit == "degree" else distance_unit
+        if self.annotations["distance_unit"] == "degree":
+            dist = otrace.stats.distance
+            distance_unit = "°"
+        else:
+            dist = otrace.stats.distance_km
+            distance_unit = "km"
+
         azimuth = otrace.stats.back_azimuth
         n_kinematic_models = len(lst_copy)
         temp_dic = {
@@ -376,30 +390,30 @@ class WaveformFigureGenerator:
             "azimuth": azimuth,
             "distance_unit": distance_unit,
         }
+        gof_pref = f"{self.plot_type[0]}{self.plt_id}"
         for j, comp in enumerate(self.components):
             j0 = compute_j0(j)
             ymin0, ymax0 = self.axarr[ins, j0].get_ylim()
             gofstrings = []
             annot = []
-
             for ist, myst in enumerate(lst_copy):
                 try:
                     gof, y0 = self.compute_misfit(myst, st_obs, comp, reftime)
                 except ValueError:
                     gof, y0 = 0, 0
-                temp_dic[f"{self.signal_kind}_{comp}{ist}"] = gof
-                if "misfit" in self.annotations:
+                temp_dic[f"{gof_pref}_{comp}{ist}"] = gof
+                if "misfit" in self.annotations["fields"]:
                     gofstrings += [f"{gof:.2f}"]
                 if j == 0 and ist == n_kinematic_models - 1:
-                    if "distance" in self.annotations:
+                    if "distance" in self.annotations["fields"]:
                         annot += [f"d:{dist:.0f}{distance_unit}"]
-                    if "azimuth" in self.annotations:
+                    if "azimuth" in self.annotations["fields"]:
                         annot += [f"a:{azimuth:.0f}°"]
                 if ist == n_kinematic_models - 1:
-                    if "misfit" in self.annotations:
+                    if "misfit" in self.annotations["fields"]:
                         gofstring = "\n" + " ".join(gofstrings)
                         annot += [f"{gofstring}"]
-                    if self.normalize:
+                    if self.plt_cfg["normalize"]:
                         annot += ["\n".join(vmax_annot)]
                 annotations = " ".join(annot)
                 loc = "upper" if (y0 - ymin0) / (ymax0 - ymin0) < 0.5 else "lower"
@@ -413,12 +427,9 @@ class WaveformFigureGenerator:
         if len(self.components) > 1:
             prefix = "".join(self.components)
             for i in range(self.n_kinematic_models):
-                lgof = [
-                    temp_dic[f"{self.signal_kind}_{comp}{i}"]
-                    for comp in self.components
-                ]
+                lgof = [temp_dic[f"{gof_pref}_{comp}{i}"] for comp in self.components]
                 av = sum(lgof) / self.ncomp
-                temp_dic[f"{self.signal_kind}_{prefix}{i}"] = av
+                temp_dic[f"{gof_pref}_{prefix}{i}"] = av
 
         self.gof_df.loc[len(self.gof_df)] = temp_dic
 
@@ -440,8 +451,10 @@ class WaveformFigureGenerator:
         # Find common time window
         start_osTrace = max(strace.stats.starttime, otrace.stats.starttime)
         end_osTrace = min(strace.stats.endtime, otrace.stats.endtime)
-        start_time_interp = max(reftime + self.t_before, start_osTrace)
-        end_time_interp = min(reftime + self.t_after, end_osTrace)
+
+        code = f"{otrace.stats.network}.{otrace.stats.station}"
+        start_time_interp = max(reftime + self.t_before[code], start_osTrace)
+        end_time_interp = min(reftime + self.t_after[code], end_osTrace)
 
         # Interpolation frequency
         f0 = self.filter_fmax * 4.0
@@ -462,7 +475,7 @@ class WaveformFigureGenerator:
         # Max allowed shift
         shift_sec_max = (
             100.0
-            if self.signal_kind == "generic"
+            if self.plot_type == "generic"
             else max(2.5, 0.025 * self.estimated_travel_time)
         )
         shiftmax = int(shift_sec_max * f0)
@@ -552,18 +565,26 @@ class WaveformFigureGenerator:
             raise NotImplementedError(self.kind_misfit)
         return gof, otrace.data[0] * self.scaling
 
-    def finalize_and_save_fig(self, fname):
+    def finalize_and_save_fig(self, fname=None):
+        if fname is None:
+            setup_name = self.gen_cfg["setup_name"]
+            ext = self.gen_cfg["figure_extension"]
+            fname = (
+                f"plots/{setup_name}_{self.plt_id}"
+                + f"_{self.signal_kind}_{self.plot_type}.{ext}"
+            )
+
         if self.global_legend_labels:
             self.add_global_legend()
-        if self.signal_kind == "generic":
+        if self.plot_type == "generic":
             direction = {"E": "EW", "N": "NS", "Z": "UD", "f": "FP", "o": "FN"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])
             self.axarr[-1, -1].set_xlabel("Time (s)")
-        elif self.signal_kind == "SH":
+        elif self.plot_type == "sh":
             self.axarr[0, 0].set_title("T")
             self.axarr[-1, -1].set_xlabel("time relative to SH arrival (s)")
-        elif self.signal_kind == "P":
+        elif self.plot_type == "p":
             direction = {"E": "EW", "N": "NS", "Z": "UD"}
             for j, comp in enumerate(self.components):
                 self.axarr[0, j].set_title(direction[comp])

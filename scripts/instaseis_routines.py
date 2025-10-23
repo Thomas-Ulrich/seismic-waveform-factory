@@ -639,6 +639,7 @@ def generate_synthetics_instaseis(
     projection,
     modes=["classical"],
 ):
+    os.makedirs(path_computed_synthetics, exist_ok=True)
     lst = []
     if "classical" in modes:
         lst1 = generate_synthetics_instaseis_classical_mode(

@@ -15,5 +15,4 @@ Documentation Contents
    :caption: Contents
 
    quickstart
-   ini_usage_documentation
-
+   config_parameters

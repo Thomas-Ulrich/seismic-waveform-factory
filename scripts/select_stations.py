@@ -1,39 +1,53 @@
 #!/usr/bin/env python3
 import argparse
-import configparser
 import os
+import random
 
 import geopandas as gpd
-import jinja2
 import numpy as np
 import pandas as pd
+from config_loader import ConfigLoader
+from config_schema import CONFIG_SCHEMA
+from config_utils import (
+    determine_config_scale,
+    categorize_waveform_kind_by_scale,
+    extract_instaseis_db,
+    extract_regional_durations,
+    yaml_dump,
+)
 from fault_processing import compute_shapely_polygon, get_fault_slip_coords
 from geodetic_utils import add_distance_backazimuth_to_df
 from geopy.distance import geodesic
 from obspy import UTCDateTime, read_inventory
-from obspy.clients.fdsn import Client, RoutingClient
 from obspy.core.inventory import Inventory
 from plot_station_map import generate_station_map
 from pyproj import Transformer
-from retrieve_waveforms import filter_channels_by_availability, retrieve_waveforms
+from retrieve_waveforms import (
+    filter_channels_by_availability,
+    initialize_client,
+    retrieve_waveforms,
+)
 from scipy import spatial
-from waveform_figure_utils import get_station_files_dict
+from copy import deepcopy
+
+# from waveform_figure_utils import get_station_files_dict
 
 np.random.seed(42)
+random.seed(42)
 
 
 def generate_station_df(inv0):
-    df = pd.DataFrame(columns=["network", "station", "longitude", "latitude"])
-    for i, net in enumerate(inv0):
-        for j, sta in enumerate(net):
-            new_row = {
-                "network": net.code,
-                "station": sta.code,
-                "longitude": sta.longitude,
-                "latitude": sta.latitude,
-            }
-            df.loc[len(df)] = new_row
-    return df
+    data = [
+        {
+            "network": net.code,
+            "station": sta.code,
+            "longitude": sta.longitude,
+            "latitude": sta.latitude,
+        }
+        for net in inv0
+        for sta in net
+    ]
+    return pd.DataFrame(data)
 
 
 def compute_dict_network_station(df):
@@ -46,118 +60,116 @@ def compute_dict_network_station(df):
     return network_station
 
 
-# Define a function to calculate the distance between
-# two points using their latitude and longitude
 def haversine_distance(lat1, lon1, lat2, lon2):
-    coords_1 = (lat1, lon1)
-    coords_2 = (lat2, lon2)
-    return geodesic(coords_1, coords_2).km
+    """Return the geodesic distance (km) between two latitude-longitude points."""
+    return geodesic((lat1, lon1), (lat2, lon2)).km
 
 
 def remove_synthetics_from_inventory(original_inv):
+    """Return a copy of the inventory without synthetic stations."""
     new_inv = Inventory()
-
-    for network in original_inv:
-        # Create a new network
-        new_network = network.copy()
-        new_network.stations = []  # Clear the stations list
-        for station in network:
-            if not station.site.name:
-                new_network.stations.append(station)
-            elif "synthetic" not in station.site.name.lower():
-                new_network.stations.append(station)
-
-        # If the network has any stations left, add it to the new inventory
-        if new_network.stations:
-            new_inv.networks.append(new_network)
+    for net in original_inv:
+        stations = [
+            sta
+            for sta in net
+            if not sta.site.name or "synthetic" not in sta.site.name.lower()
+        ]
+        if stations:
+            new_net = net.copy()
+            new_net.stations = stations
+            new_inv.networks.append(new_net)
     return new_inv
 
 
-def generate_geopanda_dataframe(df_stations, fault_info, projection):
-    df = pd.DataFrame(
-        columns=["network", "station", "longitude", "latitude", "distance_km"]
+def generate_geopanda_dataframe(df_stations, event, fault_info=None, projection=None):
+    """Return a GeoDataFrame of stations with distances (km) to fault or hypocenter."""
+    records = []
+    transformer = (
+        Transformer.from_crs("epsg:4326", projection, always_xy=True)
+        if projection
+        else None
     )
-    if projection:
-        transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
-        if fault_info:
-            coords = fault_info["fault_slip_coords"] / 1e3
-            tree = spatial.KDTree(coords)
-        else:
-            print("using hypocenter to compute distance in km")
-            x1, y1 = transformer.transform(hypo_lon, hypo_lat)
-            hypo_coords = np.array([x1 / 1e3, y1 / 1e3, -hypo_depth_in_km])
 
+    # Setup distance reference (fault or hypocenter)
+    if projection and fault_info:
+        tree = spatial.KDTree(fault_info["fault_slip_coords"] / 1e3)
+    elif projection:
+        print("Using hypocenter to compute distance in km")
+        x1, y1 = transformer.transform(event["lon"], event["lat"])
+        hypo_coords = np.array([x1, y1, -event["hypo_depth_in_km"]]) / 1e3
+    else:
+        tree = hypo_coords = None
+
+    # Compute distances
     for _, row in df_stations.iterrows():
-        if projection:
-            x1, y1 = transformer.transform(row.longitude, row.latitude)
-            if fault_info:
-                min_distance, _ = tree.query([x1 / 1e3, y1 / 1e3, 0])
-            else:
-                min_distance = np.linalg.norm(
-                    np.array([x1 / 1e3, y1 / 1e3, 0]) - hypo_coords
-                )
+        if not projection:
+            dist = -1.0
         else:
-            min_distance = -1.0
-        new_row = {
-            "network": row.network,
-            "station": row.station,
-            "longitude": row.longitude,
-            "latitude": row.latitude,
-            "distance_km": min_distance,
-        }
-        df.loc[len(df)] = new_row
+            x, y = transformer.transform(row.longitude, row.latitude)
+            xyz = np.array([x, y, 0]) / 1e3
+            dist = (
+                tree.query(xyz)[0] if fault_info else np.linalg.norm(xyz - hypo_coords)
+            )
+
+        records.append(
+            {
+                "network": row.network,
+                "station": row.station,
+                "longitude": row.longitude,
+                "latitude": row.latitude,
+                "distance_km": dist,
+            }
+        )
+
+    df = pd.DataFrame(records)
     df["code"] = df["network"] + "." + df["station"]
-    df.sort_values(by="distance_km", inplace=True)
-    df = df.reset_index(drop=True)
-    # Convert the latitude and longitude columns to a GeoDataFrame
-    geometry = gpd.points_from_xy(df.longitude, df.latitude)
-    crs = "epsg:4326"
-    return gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
+    df.sort_values("distance_km", inplace=True, ignore_index=True)
+
+    return gpd.GeoDataFrame(
+        df,
+        crs="epsg:4326",
+        geometry=gpd.points_from_xy(df.longitude, df.latitude),
+    )
 
 
 def select_closest_stations(available_stations, selected_stations, nstations):
-    if len(selected_stations) == 0:
-        print("selected_stations is empty, selcting the n closest nstation")
-        selected_stations = available_stations.head(nstations)
-        available_stations = available_stations.drop(selected_stations.index)
+    """Return updated DataFrames of selected and remaining stations."""
+    new_stations = available_stations.head(nstations)
+    available_stations = available_stations.iloc[nstations:]
+    selected_stations = pd.concat([selected_stations, new_stations])
 
     return selected_stations.sort_index(), available_stations.sort_index()
 
 
-def select_stations_most_distant(available_stations, selected_stations, nstations):
-    if len(selected_stations) == 0:
-        print("selected_stations is empty, selecting randomly from available_stations")
+def select_stations_maximizing_distance(
+    available_stations, selected_stations, nstations
+):
+    """Select stations maximizing distance diversity until reaching nstations."""
+    if selected_stations.empty:
+        print("selected_stations is empty; selecting one station at random.")
         selected_stations = available_stations.sample(1)
         available_stations = available_stations.drop(selected_stations.index)
 
-    nselected = len(selected_stations)
-    remaining_stations = nstations - nselected
-
-    if remaining_stations <= 0:
-        return selected_stations.sort_index(), available_stations.sort_index()
-
-    for _ in range(remaining_stations):
-        if available_stations.empty:
-            print(
-                f"GeoDataFrame is empty, {remaining_stations} stations will be missing"
-            )
-            break
-
-        distances = []
-        for _, row in available_stations.iterrows():
-            distance = min(
-                haversine_distance(
-                    row.latitude, row.longitude, station.latitude, station.longitude
-                )
-                for station in selected_stations.itertuples(index=False)
-            )
-            distances.append((distance, row))
-
-        furthest_station = max(distances, key=lambda x: x[0])[1]
-        selected_stations = pd.concat(
-            [selected_stations, furthest_station.to_frame().T]
+    while len(selected_stations) < nstations and not available_stations.empty:
+        # Compute minimum distance of each available station to any selected ones
+        distances = available_stations.apply(
+            lambda row: min(
+                haversine_distance(row.latitude, row.longitude, s.latitude, s.longitude)
+                for s in selected_stations.itertuples(index=False)
+            ),
+            axis=1,
         )
-        available_stations = available_stations.drop(furthest_station.name)
+
+        # Pick the farthest station and update sets
+        furthest_idx = distances.idxmax()
+        selected_stations = pd.concat(
+            [selected_stations, available_stations.loc[[furthest_idx]]]
+        )
+        available_stations = available_stations.drop(furthest_idx)
+
+    if available_stations.empty and len(selected_stations) < nstations:
+        print("GeoDataFrame is empty;")
+        print(f"{nstations - len(selected_stations)} stations missing.")
 
     return selected_stations.sort_index(), available_stations.sort_index()
 
@@ -165,128 +177,145 @@ def select_stations_most_distant(available_stations, selected_stations, nstation
 def select_teleseismic_stations_aiming_for_azimuthal_coverage(
     available_stations, selected_stations_at_start, nstations_to_select
 ):
+    """
+    Select teleseismic stations aiming for even azimuthal and distance coverage.
+
+    Parameters
+    ----------
+    available_stations : pd.DataFrame
+        Stations with 'backazimuth' and 'distance' columns.
+    selected_stations_at_start : pd.DataFrame
+        Already selected stations to include.
+    nstations_to_select : int
+        Total number of stations to select.
+
+    Returns
+    -------
+    pd.DataFrame, pd.DataFrame
+        Selected stations, remaining stations.
+    """
     nstations = nstations_to_select - len(selected_stations_at_start)
-    df = available_stations
-    # Parameters
-    n = 8  # Number of backazimuth panels (0-360 degrees)
-    p = 4  # Number of distance panels (0-90 degrees)
+    if nstations <= 0:
+        return selected_stations_at_start.copy(), available_stations.copy()
 
-    # Function to assign backazimuth panel
-    def assign_backazimuth_panel(backazimuth, n):
-        return int(backazimuth // (360 / n))
+    df = available_stations.copy()
 
-    # Function to assign distance panel
-    def assign_distance_panel(distance, p):
-        return int((distance - 30) // (60 / p))
+    # Define panels
+    n_baz_panels = 8
+    n_dist_panels = 4
 
-    # Assign panels based on backazimuth and distance
-    df["backazimuth_panel"] = df["backazimuth"].apply(assign_backazimuth_panel, n=n)
-    df["distance_panel"] = df["distance"].apply(assign_distance_panel, p=p)
+    # Assign panels
+    df["backazimuth_panel"] = (df["backazimuth"] // (360 / n_baz_panels)).astype(int)
+    df["distance_panel"] = ((df["distance"] - 30) // (60 / n_dist_panels)).astype(int)
 
-    # Group stations by their backazimuth and distance panels
     panel_groups = df.groupby(["backazimuth_panel", "distance_panel"])
+    panel_keys = list(panel_groups.groups.keys())
 
-    # Total number of panels available
-    num_panels = len(panel_groups)
+    selected_stations_list = []
 
-    selected_stations = []
-
-    if num_panels >= nstations:
-        # If there are enough panels, select `n` random panels and sample one station
-        # per panel
-        # Convert panel_groups.groups.keys() to a list
-        panel_keys = list(panel_groups.groups.keys())
-
-        # Randomly select panels
-        selected_panels = np.random.choice(
-            len(panel_keys), size=nstations, replace=False
-        )
-
-        # Map the selected indices back to the actual keys
-        selected_panels = [panel_keys[i] for i in selected_panels]
-
-        for panel in selected_panels:
-            group = panel_groups.get_group(panel)
-            selected_station = group.sample(n=1)  # Randomly select one station
-            selected_stations.append(selected_station)
-        selected_stations_df = pd.concat(selected_stations)
-
+    if len(panel_keys) >= nstations:
+        chosen_panels = random.sample(panel_keys, k=nstations)
+        for panel in chosen_panels:
+            selected_stations_list.append(panel_groups.get_group(panel).sample(n=1))
     else:
-        # If there are fewer panels than `n`, select all available panels
-        selected_stations = []
-        for (backazimuth_panel, distance_panel), group in panel_groups:
-            # Randomly select one station from each group
-            selected_station = group.sample(n=1)
-            selected_stations.append(selected_station)
+        # Select one station per panel
+        for _, group in panel_groups:
+            selected_stations_list.append(group.sample(n=1))
 
-        # Combine the selected stations into a DataFrame to track them
-        selected_stations_df = pd.concat(selected_stations)
-        selected_station_ids = selected_stations_df["station"].values.tolist()
+        selected_ids = pd.concat(selected_stations_list)["station"].tolist()
+        remaining_needed = nstations - len(selected_ids)
 
-        # If there are still remaining stations to reach `nstations`,
-        # sample from the remaining stations
-        remaining_stations_needed = nstations - len(selected_stations_df)
-        if remaining_stations_needed > 0:
-            remaining_groups = panel_groups.apply(
-                lambda x: x[~x["station"].isin(selected_station_ids)]
-            )
-            remaining_stations = remaining_groups.sample(
-                n=remaining_stations_needed, replace=False
+        if remaining_needed > 0:
+            remaining_stations = df[~df["station"].isin(selected_ids)]
+            selected_stations_list.append(
+                remaining_stations.sample(n=remaining_needed, replace=False)
             )
 
-            selected_stations_df = pd.concat([selected_stations_df, remaining_stations])
-
-    # Final DataFrame of selected stations
+    selected_stations_df = pd.concat(selected_stations_list)
     df_selected = pd.merge(
-        selected_stations_df, selected_stations_at_start, how="outer"
+        selected_stations_at_start, selected_stations_df, how="outer"
     )
-
     df_remaining = df[~df["station"].isin(df_selected["station"])]
-    return df_selected, df_remaining
+
+    return df_selected.reset_index(drop=True), df_remaining.reset_index(drop=True)
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Select stations ensuring optimal coverage for an earthquake."
+        description="Select stations ensuring optimal coverage for an earthquake.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("config_file", help="Config file describing the event.")
+
+    # Positional arguments
+    parser.add_argument("config_file", help="yaml config file describing the event.")
     parser.add_argument(
-        "number_stations", type=int, help="Number of stations to select (in total)"
+        "number_stations", type=int, help="Total number of stations to select."
     )
     parser.add_argument(
-        "closest_stations", type=int, help="Number of the closest station to select."
+        "closest_stations", type=int, help="Number of closest stations to select."
     )
+
+    # Optional arguments
     parser.add_argument(
         "--distance_range",
         type=float,
-        help="distance range from selecting stations (degrees)",
         nargs=2,
+        metavar=("MIN", "MAX"),
+        help="Distance range (degrees) from which to select stations.",
     )
-
     parser.add_argument(
-        "--channel", default="*", type=str, help="filter channels to be retrieved"
+        "--channel",
+        default="*",
+        type=str,
+        help='Filter channels to be retrieved (default "*" = all channels).',
     )
     parser.add_argument(
         "--store_format",
         choices=["sac", "mseed"],
         default="mseed",
         type=str,
-        help="store format for waveform data",
+        help="Storage format for waveform data.",
     )
-
     parser.add_argument(
         "--azimuthal",
         action="store_true",
-        help="Select stations based on back-azimuth (else based on distance).",
+        help="Select stations based on back-azimuth instead of distance.",
     )
+    parser.add_argument(
+        "--station_kind",
+        choices=["auto", "regional", "global"],
+        default="auto",
+        type=str,
+        help="kind of stations to select.",
+    )
+
     return parser.parse_args()
 
 
-def read_config(config_file):
-    config = configparser.ConfigParser()
-    assert os.path.isfile(config_file), f"{config_file} not found"
-    config.read(config_file)
-    return config
+def normalize_bounds(spatial_range, r1):
+    """Expand spatial bounds and normalize lat/lon within valid Earth ranges."""
+
+    def clamp_lon(lon):
+        """Clamp longitude to [-180, 180]."""
+        return max(-180, min(180, lon))
+
+    def clamp_lat(lat):
+        """Clamp latitude to [-90, 90]."""
+        return max(-90, min(90, lat))
+
+    lon_min = clamp_lon(spatial_range["source_lon_range"][0] - r1)
+    lon_max = clamp_lon(spatial_range["source_lon_range"][1] + r1)
+    lat_min = clamp_lat(spatial_range["source_lat_range"][0] - r1)
+    lat_max = clamp_lat(spatial_range["source_lat_range"][1] + r1)
+
+    kargs = {
+        "minlongitude": lon_min,
+        "maxlongitude": lon_max,
+        "minlatitude": lat_min,
+        "maxlatitude": lat_max,
+    }
+
+    return kargs
 
 
 def load_or_create_inventory(
@@ -309,17 +338,14 @@ def load_or_create_inventory(
         endtime = event["onset"] + t_after
         kargs = {}
         r0, r1 = spatial_range["radius"]
-        if "source_lon_range" in spatial_range.keys():
-            kargs["minlongitude"] = spatial_range["source_lon_range"][0] - r1
-            kargs["maxlongitude"] = spatial_range["source_lon_range"][1] + r1
-            kargs["minlatitude"] = spatial_range["source_lat_range"][0] - r1
-            kargs["maxlatitude"] = spatial_range["source_lat_range"][1] + r1
+        if "source_lon_range" in spatial_range.keys() and r1 < 30:
+            kargs = normalize_bounds(spatial_range, r1)
         else:
             kargs["minradius"] = r0
             kargs["maxradius"] = r1
-            kargs["latitude"] = event["latitude"]
-            kargs["longitude"] = event["longitude"]
-            if r1 > 30:
+            kargs["latitude"] = event["lat"]
+            kargs["longitude"] = event["lon"]
+            if r1 >= 30:
                 kargs["network"] = "IU,II,GE,G"
                 print(
                     f"Warning: using only networks {kargs['network']} for teleseismic"
@@ -334,15 +360,18 @@ def load_or_create_inventory(
         else:
             level = "channel"
             kargs["includerestricted"] = False
+        kargs["starttime"] = starttime
+        kargs["endtime"] = endtime
+        kargs["level"] = level
+        kargs["channel"] = channel
+        kargs["includeavailability"] = True
 
+        print("running client.get_stations with:")
+        print(kargs)
         inventory = client.get_stations(
-            starttime=starttime,
-            endtime=endtime,
-            level=level,
-            channel=channel,
-            includeavailability=True,
             **kargs,
         )
+        print("done running client.get_stations")
 
         if level == "channel":
             inventory = filter_channels_by_availability(inventory, starttime, endtime)
@@ -353,48 +382,59 @@ def load_or_create_inventory(
 
 
 def compute_min_max_coords(fault_info):
-    # Initialize the transformer with the provided projection
-    projection = fault_info["projection"]
-    transformer = Transformer.from_crs(projection, "epsg:4326", always_xy=True)
-    polygons = fault_info["polygons"]
+    transformer = Transformer.from_crs(
+        fault_info["projection"], "epsg:4326", always_xy=True
+    )
+    xs, ys = [], []
 
-    # Initialize min and max coordinates
-    min_x, min_y = float("inf"), float("inf")
-    max_x, max_y = float("-inf"), float("-inf")
+    for poly in fault_info["polygons"]:
+        x, y = transformer.transform(*poly.exterior.xy)
+        xs.extend(x)
+        ys.extend(y)
 
-    # Transform each polygon and compute min/max coordinates
-    for poly in polygons:
-        x1, y1 = poly.exterior.xy
-        x1, y1 = transformer.transform(x1, y1)
-
-        min_x = min(min_x, min(x1))
-        min_y = min(min_y, min(y1))
-        max_x = max(max_x, max(x1))
-        max_y = max(max_y, max(y1))
-
-    # Return the min and max coordinates
-    return (min_x, max_x), (min_y, max_y)
+    return (min(xs), max(xs)), (min(ys), max(ys))
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
-    config = read_config(args.config_file)
-    setup_name = config.get("GENERAL", "setup_name")
-    client_name = config.get("GENERAL", "client")
-    onset = config.get("GENERAL", "onset")
-    hypo_lon = config.getfloat("GENERAL", "hypo_lon")
-    hypo_lat = config.getfloat("GENERAL", "hypo_lat")
-    hypo_depth_in_km = config.getfloat("GENERAL", "hypo_depth_in_km")
-    config_stations = config.get("GENERAL", "stations", fallback="")
-    path_observations = config.get("GENERAL", "path_observations")
-    kind_vd = config.get("GENERAL", "kind")
-    software = config.get("GENERAL", "software").split(",")
-    is_teleseismic = "axitra" not in software
+def select_stations(
+    config_file,
+    number_stations,
+    closest_stations,
+    distance_range,
+    channel,
+    store_format,
+    azimuthal,
+    station_kind,
+):
+    cfg = ConfigLoader(config_file, CONFIG_SCHEMA)
 
-    faultfname = config.get("GENERAL", "fault_filename", fallback=None)
-    station_file = config.get("GENERAL", "station_file", fallback=None)
+    client_name = cfg["general"]["client"]
+    path_observations = cfg["general"]["path_observations"]
+    waveform_kind = categorize_waveform_kind_by_scale(cfg)
+    config_scale = determine_config_scale(cfg)
+
+    if station_kind == "auto":
+        if config_scale["regional"] and config_scale["global"]:
+            raise ValueError(
+                "there are plots with and without instaseis.",
+                "cannot determine station_kind with station_kind == 'auto'",
+            )
+        else:
+            is_teleseismic = config_scale["global"]
+    else:
+        is_teleseismic = station_kind == "global"
+    print(f"station_kind: {station_kind}, is_teleseismic {is_teleseismic}")
+
+    key = "global" if is_teleseismic else "regional"
+
+    assert (
+        len(waveform_kind[key]) == 1
+    ), f"several waveform kind requested, {waveform_kind[key]}"
+    kind_vd = waveform_kind[key][0]
+
+    station_file = cfg["general"]["station_file"]
 
     processed_data = {}
+    """
     if config.has_section("PROCESSED_WAVEFORMS"):
         processed_data["directory"] = config.get("PROCESSED_WAVEFORMS", "directory")
         processed_data["wf_kind"] = config.get("PROCESSED_WAVEFORMS", "wf_kind")
@@ -404,13 +444,15 @@ if __name__ == "__main__":
         processed_data["station_files"] = get_station_files_dict(
             processed_data["directory"]
         )
+    """
 
     spatial_range = {}
 
+    faultfname = cfg["general"]["fault_file"]
     if faultfname:
         polygons = compute_shapely_polygon(faultfname)
         fault_slip_coords = get_fault_slip_coords(faultfname)
-        projection = config.get("GENERAL", "projection")
+        projection = cfg["general"]["projection"]
         fault_info = {}
         fault_info["projection"] = projection
         fault_info["fault_slip_coords"] = fault_slip_coords
@@ -423,17 +465,18 @@ if __name__ == "__main__":
         fault_info = None
 
     if not is_teleseismic:
-        duration = config.getfloat("GENERAL", "axitra_pyprop8_duration")
-        t_before = 100
-        t_after = duration + 100
+        durations = extract_regional_durations(cfg)
+        signal_length = max(durations)
         spatial_range["radius"] = [0.0, 2.5]
     else:
         try:
             import instaseis
 
-            db_name = config.get("GENERAL", "db")
-            db = instaseis.open_db(db_name)
-            signal_length = db.info.length
+            dbs = extract_instaseis_db(cfg)
+            signal_length = 0
+            for db_name in dbs:
+                db = instaseis.open_db(db_name)
+                signal_length = max(signal_length, db.info.length)
         except (ImportError, ModuleNotFoundError) as e:
             print(f"instaseis not available: {e}")
             signal_length = 3600.0
@@ -441,21 +484,21 @@ if __name__ == "__main__":
             print(f"Could not open Instaseis DB: {e}")
             signal_length = 3600.0
 
-        t_before = 1000
-        t_after = signal_length + 1000
         spatial_range["radius"] = [30.0, 90.0]
 
-    if args.distance_range:
-        spatial_range["radius"] = args.distance_range
+    extra_time = max(100.0, 0.1 * signal_length)
+    t_before = extra_time
+    t_after = signal_length + extra_time
 
-    if client_name in ["eida-routing", "iris-federator"]:
-        client = RoutingClient(client_name)
-    else:
-        client = Client(client_name)
+    if distance_range:
+        spatial_range["radius"] = distance_range
+
+    client = initialize_client(client_name)
 
     # Define the event parameters
-    event_time = UTCDateTime(onset)
-    event = {"longitude": hypo_lon, "latitude": hypo_lat, "onset": event_time}
+    event = deepcopy(cfg["general"]["hypocenter"])
+    event["onset"] = UTCDateTime(event["onset"])
+
     starttime = event["onset"] - t_before
     endtime = event["onset"] + t_after
 
@@ -473,33 +516,39 @@ if __name__ == "__main__":
             spatial_range,
             t_before,
             t_before,
-            args.channel,
+            channel,
         )
         inventory = remove_synthetics_from_inventory(inventory)
         filtered_networks = [net for net in inventory.networks if net.code != "AM"]
         new_inventory = Inventory(networks=filtered_networks, source=inventory.source)
         all_stations = new_inventory.get_contents()["stations"]
-        if len(all_stations) > (args.number_stations):
+        if len(all_stations) > (number_stations):
             print("remove AM network")
             inventory = new_inventory
         else:
             print("did not remove AM network, else too no enough stations remaining")
 
         station_df = generate_station_df(inventory)
-    print(station_df)
 
-    projection = config.get("GENERAL", "projection", fallback="")
-    available_stations = generate_geopanda_dataframe(station_df, fault_info, projection)
+    projection = cfg["general"]["projection"]
+    if is_teleseismic:
+        azimuthal = True
+        projection = None
+
+    available_stations = generate_geopanda_dataframe(
+        station_df, event, fault_info, projection
+    )
+    print("available_stations:")
     print(available_stations)
 
     if projection:
         # 60 closest stations are written for seissol output
-        closest_stations = available_stations.head(60)
+        s_closest_stations = available_stations.head(60)
         transformer = Transformer.from_crs("epsg:4326", projection, always_xy=True)
         x1, y1 = transformer.transform(
-            closest_stations["longitude"], closest_stations["latitude"]
+            s_closest_stations["longitude"], s_closest_stations["latitude"]
         )
-        n_seissol_station = len(closest_stations)
+        n_seissol_station = len(s_closest_stations)
         nstations_in_file = [n_seissol_station]
         if n_seissol_station > 5:
             nstations_in_file.append(5)
@@ -517,67 +566,74 @@ if __name__ == "__main__":
         ].reset_index(drop=True)
 
     # + 10 because we expect some station with no data
-    if len(available_stations) > (args.number_stations + 10) and not is_teleseismic:
-        dmax = available_stations.iloc[args.number_stations + 10]["distance_km"]
+    if len(available_stations) > (number_stations + 10) and not is_teleseismic:
+        dmax = available_stations.iloc[number_stations + 10]["distance_km"]
         # Create a boolean mask and filter by distance
         mask = (available_stations["distance_km"] >= 0) & (
             available_stations["distance_km"] <= dmax
         )
         other_available_stations = available_stations[~mask]
         available_stations = available_stations[mask]
-        print(
-            f"available ({args.number_stations + 10} closest, that is up to {dmax} km):"
-        )
+        print(f"available ({number_stations + 10} closest, that is up to {dmax} km):")
     else:
         other_available_stations = gpd.GeoDataFrame()
         print("available (no restrictions):")
 
-    if args.azimuthal:
+    if azimuthal:
         available_stations = add_distance_backazimuth_to_df(available_stations, event)
         available_stations = available_stations.drop(columns=["geometry"])
 
     print(available_stations)
     # required if not enough stations in the inventory
-    args.number_stations = min(args.number_stations, len(available_stations))
+    number_stations = min(number_stations, len(available_stations))
     # initialize empty df
     selected_stations = pd.DataFrame(columns=available_stations.columns)
 
-    while True:
-        if args.closest_stations and selected_stations.empty:
-            if args.closest_stations <= args.number_stations:
-                print("args.closest_stations <= args.number_stations")
-                args.closest_stations = args.number_stations
-            previous_selected_stations = selected_stations.copy()
+    iteration = 0
+    while len(selected_stations) < number_stations:
+        iteration += 1
+        print(f"iteration {iteration}")
+        if iteration > 30:
+            raise ("reaching iteration 30, probably something went wrong")
+
+        previous_selected = selected_stations.copy()
+
+        # If we have "closest_stations" constraint, ensure it's at least number_stations
+        if closest_stations and number_stations < closest_stations:
+            print("closest_stations <= number_stations")
+            closest_stations = number_stations
+
+        # 1 Select new candidate stations
+        if len(selected_stations) < closest_stations:
+            print("selecting nearest stations")
             selected_stations, available_stations = select_closest_stations(
-                available_stations, selected_stations, args.closest_stations
+                available_stations, selected_stations, closest_stations
+            )
+
+        elif azimuthal:
+            print("selecting stations aiming for azimuthal and distance coverage")
+            (
+                selected_stations,
+                available_stations,
+            ) = select_teleseismic_stations_aiming_for_azimuthal_coverage(
+                available_stations, selected_stations, number_stations
             )
         else:
-            previous_selected_stations = selected_stations.copy()
-            if args.azimuthal:
-                (
-                    selected_stations,
-                    available_stations,
-                ) = select_teleseismic_stations_aiming_for_azimuthal_coverage(
-                    available_stations, selected_stations, args.number_stations
-                )
-            else:
-                selected_stations, available_stations = select_stations_most_distant(
-                    available_stations, selected_stations, args.number_stations
-                )
+            print("selecting stations maximizing distance")
+            selected_stations, available_stations = select_stations_maximizing_distance(
+                available_stations, selected_stations, number_stations
+            )
 
-        added_rows = selected_stations[
-            ~selected_stations["code"].isin(previous_selected_stations["code"])
+        # 2 Determine newly added stations
+        new_rows = selected_stations[
+            ~selected_stations["code"].isin(previous_selected["code"])
         ]
-        print("selection:", selected_stations)
-        print("added:", added_rows)
-        print("available:", available_stations)
+        print("Added stations:\n", new_rows)
 
-        network_station = compute_dict_network_station(added_rows)
-        # transform the dictionnary in a list of strings "network.station"
+        # 3 Retrieve data
+        net_sta_dict = compute_dict_network_station(new_rows)
         network_station = [
-            f"{key}.{value}"
-            for key, values in network_station.items()
-            for value in values
+            f"{net}.{sta}" for net, stas in net_sta_dict.items() for sta in stas
         ]
 
         retrieved_waveforms = retrieve_waveforms(
@@ -588,58 +644,92 @@ if __name__ == "__main__":
             starttime,
             endtime,
             processed_data=processed_data,
-            output_format=args.store_format,
-            channel=args.channel,
+            output_format=store_format,
+            channel=channel,
+            is_regional=not is_teleseismic,
         )
 
-        retrieved_stations = list(retrieved_waveforms.keys())
-        print("retrieved_stations", retrieved_stations)
-        added_rows = selected_stations[
-            selected_stations["code"].isin(retrieved_stations)
+        retrieved_codes = list(retrieved_waveforms.keys())
+        retrieved_rows = selected_stations[
+            selected_stations["code"].isin(retrieved_codes)
         ]
-        print("retrieved rows", added_rows)
-        selected_stations = pd.concat(
-            [previous_selected_stations, added_rows], ignore_index=True
-        )
-        print("new selected_stations", selected_stations)
 
-        # required if not enough stations in the inventory
-        if not other_available_stations.empty and len(
-            available_stations
-        ) < args.number_stations - len(selected_stations):
+        # 4 Keep only retrieved rows
+        selected_stations = pd.concat(
+            [previous_selected, retrieved_rows], ignore_index=True
+        )
+        print("Current selected stations:\n", selected_stations)
+
+        # 5 If we run out of available stations, merge with "other" pool
+        remaining_needed = number_stations - len(selected_stations)
+        if (
+            not other_available_stations.empty
+            and len(available_stations) < remaining_needed
+        ):
+            print("Adding other available stations")
             available_stations = gpd.GeoDataFrame(
                 pd.concat(
                     [available_stations, other_available_stations], ignore_index=True
                 )
             )
-            print("print adding first discarded other available stations")
-            print(other_available_stations)
-            print("available_stations is now:")
-            print(available_stations)
             other_available_stations = gpd.GeoDataFrame()
 
-        args.number_stations = min(
-            args.number_stations, len(selected_stations) + len(available_stations)
+        # 6 Adjust number_stations in case available list shrinks
+        number_stations = min(
+            number_stations, len(selected_stations) + len(available_stations)
         )
 
-        if len(selected_stations) == args.number_stations:
-            print("done selecting stations")
+        # 7 top if enough stations are selected
+        if len(selected_stations) >= number_stations:
+            print("Done selecting stations")
             print(selected_stations)
             break
-    generate_station_map(
-        selected_stations, event, setup_name=setup_name, fault_info=fault_info
+
+    generate_station_map(selected_stations, cfg, is_teleseismic)
+
+    dict_teleseismic = {
+        syn["name"]: (syn["type"] == "instaseis") for syn in cfg["synthetics"]
+    }
+    need_update = False
+    for i_plot, wf_plot in enumerate(cfg["waveform_plots"]):
+        if not wf_plot.get("enabled", True):
+            continue
+        global_sta = any(dict_teleseismic[name] for name in wf_plot["synthetics"])
+        if is_teleseismic == global_sta:
+            if len(wf_plot["stations"]) == 0:
+                wf_plot["stations"] = list(selected_stations["code"])
+                print(
+                    f"updating stations in waveform_plots{i_plot} ({wf_plot['type']})"
+                )
+                need_update = True
+            else:
+                print(
+                    (
+                        f"not updating stations in waveform_plots{i_plot}, because ",
+                        f"the station field is already filled: ({wf_plot['stations']})",
+                    )
+                )
+                print("please manually add:")
+                station_codes = ", ".join(selected_stations["code"])
+                print(f"stations = [{station_codes}]")
+
+    if need_update:
+        # Save to new YAML file
+        out_fname = config_file
+        root, ext = os.path.splitext(config_file)
+        out_fname = f"{root}_sources{ext}"
+        yaml_dump(cfg.config, out_fname)
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    select_stations(
+        args.config_file,
+        args.number_stations,
+        args.closest_stations,
+        args.distance_range,
+        args.channel,
+        args.store_format,
+        args.azimuthal,
+        args.station_kind,
     )
-    if "{{ stations }}" in config_stations:
-        templateLoader = jinja2.FileSystemLoader(searchpath=os.getcwd())
-        templateEnv = jinja2.Environment(loader=templateLoader)
-        template = templateEnv.get_template(args.config_file)
-        outputText = template.render({"stations": ",".join(selected_stations["code"])})
-        out_fname = args.config_file
-        with open(out_fname, "w") as fid:
-            fid.write(outputText)
-            print(f"done creating {out_fname}")
-    else:
-        print("no {{ stations }} field in the GENERAL/stations in the config file")
-        print("please manually add:")
-        station_codes = ",".join(selected_stations["code"])
-        print(f"stations = {station_codes}")
