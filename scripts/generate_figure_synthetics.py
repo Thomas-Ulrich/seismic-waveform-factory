@@ -299,7 +299,7 @@ for syn_name, syn_types in syn_info.items():
         merged[kind]["duration"] = max(merged[kind]["duration"], info["duration"])
 
 
-is_regional = not "instaseis" in syn_types
+is_regional = "instaseis" not in syn_types
 retrieved_waveforms = {}
 for kind_vd in merged.keys():
     duration = merged[kind_vd]["duration"]
