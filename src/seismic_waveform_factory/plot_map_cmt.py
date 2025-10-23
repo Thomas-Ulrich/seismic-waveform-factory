@@ -3,14 +3,15 @@ import argparse
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import cmt
 import h5py
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from obspy.imaging.mopad_wrapper import beach
 from pyproj import Transformer
-from scalebar import scale_bar
+
+from seismic_waveform_factory.utils import cmt
+from seismic_waveform_factory.utils.scalebar import scale_bar
 
 
 def plot_outer_boundary(vertex, connect, ax):

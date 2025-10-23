@@ -1,6 +1,7 @@
+from copy import deepcopy
+
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
-from copy import deepcopy
 
 
 def determine_config_scale(cfg):

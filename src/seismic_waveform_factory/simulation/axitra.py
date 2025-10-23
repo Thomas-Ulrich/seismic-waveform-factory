@@ -1,4 +1,3 @@
-import cmt
 import h5py
 import numpy as np
 from axitra import Axitra, moment
@@ -7,6 +6,8 @@ from obspy.imaging.beachball import MomentTensor, mt2plane
 from pyproj import Transformer
 from scipy.signal import fftconvolve
 from tqdm import tqdm
+
+from seismic_waveform_factory.utils import cmt
 
 
 def create_axitra_station_file(station_coords):

@@ -10,16 +10,17 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
-from config.loader import ConfigLoader
-from config.schema import CONFIG_SCHEMA
-from config.utils import categorize_stations_by_scale
-from fault_processing import compute_shapely_polygon
-from geodetic_utils import add_distance_backazimuth_to_df
 from obspy import UTCDateTime, read_inventory
 from obspy.core.inventory import Inventory
 from pyproj import Transformer
-from retrieve_waveforms import initialize_client
-from scalebar import scale_bar
+
+from seismic_waveform_factory.config.loader import ConfigLoader
+from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+from seismic_waveform_factory.config.utils import categorize_stations_by_scale
+from seismic_waveform_factory.fault.fault_processing import compute_shapely_polygon
+from seismic_waveform_factory.geo.utils import add_distance_backazimuth_to_df
+from seismic_waveform_factory.utils.scalebar import scale_bar
+from seismic_waveform_factory.waveform.retrieve import initialize_client
 
 
 def retrieve_coordinates(cfg, station_codes):

@@ -3,8 +3,9 @@ import argparse
 from itertools import cycle, islice
 
 import matplotlib.pyplot as plt
-from config.loader import ConfigLoader
-from config.schema import CONFIG_SCHEMA
+
+from seismic_waveform_factory.config.loader import ConfigLoader
+from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
 
 parser = argparse.ArgumentParser(description=("generate legend box only"))
 parser.add_argument("config_file", help="config file describing event and stations")

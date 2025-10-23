@@ -1,6 +1,7 @@
-import cmt
 import numpy as np
 import seissolxdmf
+
+from seismic_waveform_factory.utils import cmt
 
 
 class FaultOutput:

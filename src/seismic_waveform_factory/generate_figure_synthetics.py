@@ -7,20 +7,21 @@ from itertools import cycle
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from config.loader import ConfigLoader
-from config.schema import CONFIG_SCHEMA
 from obspy import UTCDateTime
 from obspy.geodetics import degrees2kilometers, locations2degrees
 from obspy.geodetics.base import gps2dist_azimuth
-from retrieve_waveforms import retrieve_waveforms
-from waveform_figure_generator import WaveformFigureGenerator
-from waveform_figure_utils import (
+
+from seismic_waveform_factory.config.loader import ConfigLoader
+from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+from seismic_waveform_factory.figure.generator import WaveformFigureGenerator
+from seismic_waveform_factory.utils.waveform import (
     compile_station_coords_main,
     estimate_travel_time,
     get_station_files_dict,
     merge_gof_dfs,
     reorder_station_coords_from_azimuth,
 )
+from seismic_waveform_factory.waveform.retrieve import retrieve_waveforms
 
 # Ensure all rows and columns are displayed
 pd.set_option("display.max_rows", None)  # Show all rows
@@ -208,7 +209,9 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
 def generate_synthetics(wf_syn_config, station_coords, syn_type):
     source_files = wf_syn_config["source_files"]
     if syn_type == "instaseis":
-        from simulation.instaseis import generate_synthetics_instaseis
+        from seismic_waveform_factory.simulation.instaseis import (
+            generate_synthetics_instaseis,
+        )
 
         list_synthetics = generate_synthetics_instaseis(
             wf_syn_config["db"],
@@ -223,7 +226,9 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
         )
 
     elif syn_type == "seissol":
-        from simulation.seissol import collect_seissol_synthetics
+        from seismic_waveform_factory.simulation.seissol import (
+            collect_seissol_synthetics,
+        )
 
         assert projection is not None
         list_synthetics = collect_seissol_synthetics(
@@ -235,7 +240,9 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
             if os.path.isfile(os.path.join(my_path, "axitra")):
                 sys.path.append(my_path.strip())
                 break
-        from simulation.axitra import generate_synthetics_axitra
+        from seismic_waveform_factory.simulation.axitra import (
+            generate_synthetics_axitra,
+        )
 
         list_synthetics = generate_synthetics_axitra(
             source_files,
@@ -249,7 +256,9 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
         )
 
     elif syn_type == "pyprop8":
-        from simulation.pyprop8 import generate_synthetics_pyprop8
+        from seismic_waveform_factory.simulation.pyprop8 import (
+            generate_synthetics_pyprop8,
+        )
 
         list_synthetics = generate_synthetics_pyprop8(
             source_files,

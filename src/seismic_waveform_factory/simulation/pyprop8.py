@@ -1,6 +1,5 @@
 import os
 
-import cmt
 import h5py
 import numpy as np
 import pyprop8 as pp
@@ -10,6 +9,8 @@ from pyproj import Transformer
 from pyprop8.utils import make_moment_tensor, rtf2xyz
 from scipy.signal import fftconvolve
 from tqdm import tqdm
+
+from seismic_waveform_factory.utils import cmt
 
 
 def create_pyprop8_receivers(station_coords, transformer):

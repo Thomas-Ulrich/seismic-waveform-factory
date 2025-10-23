@@ -6,7 +6,8 @@ import pandas as pd
 from obspy import read
 from obspy.geodetics.base import gps2dist_azimuth
 from obspy.taup import TauPyModel
-from retrieve_waveforms import get_station_data
+
+from seismic_waveform_factory.waveform.retrieve import get_station_data
 
 
 def get_station_name_from_mseed(file_path):

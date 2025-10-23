@@ -2,35 +2,37 @@
 import argparse
 import os
 import random
+from copy import deepcopy
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from config.loader import ConfigLoader
-from config.schema import CONFIG_SCHEMA
-from config.utils import (
-    determine_config_scale,
+from geopy.distance import geodesic
+from obspy import UTCDateTime, read_inventory
+from obspy.core.inventory import Inventory
+from pyproj import Transformer
+from scipy import spatial
+
+from seismic_waveform_factory.config.loader import ConfigLoader
+from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+from seismic_waveform_factory.config.utils import (
     categorize_waveform_kind_by_scale,
+    determine_config_scale,
     extract_instaseis_db,
     extract_regional_durations,
     yaml_dump,
 )
-from fault_processing import compute_shapely_polygon, get_fault_slip_coords
-from geodetic_utils import add_distance_backazimuth_to_df
-from geopy.distance import geodesic
-from obspy import UTCDateTime, read_inventory
-from obspy.core.inventory import Inventory
-from plot_station_map import generate_station_map
-from pyproj import Transformer
-from retrieve_waveforms import (
+from seismic_waveform_factory.fault.fault_processing import (
+    compute_shapely_polygon,
+    get_fault_slip_coords,
+)
+from seismic_waveform_factory.geo.utils import add_distance_backazimuth_to_df
+from seismic_waveform_factory.plot_station_map import generate_station_map
+from seismic_waveform_factory.waveform.retrieve import (
     filter_channels_by_availability,
     initialize_client,
     retrieve_waveforms,
 )
-from scipy import spatial
-from copy import deepcopy
-
-# from waveform_figure_utils import get_station_files_dict
 
 np.random.seed(42)
 random.seed(42)

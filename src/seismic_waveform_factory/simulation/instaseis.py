@@ -6,11 +6,12 @@ import h5py
 import instaseis
 import numpy as np
 import pyproj
-from cmt import compute_seismic_moment
 from obspy import Stream, Trace, read
 from obspy.imaging.beachball import MomentTensor, mt2plane
 from scipy.signal import hann
 from tqdm import tqdm
+
+from seismic_waveform_factory.utils.cmt import compute_seismic_moment
 
 
 def fft_reconvolve_stf(db, trace_data, new_stf):

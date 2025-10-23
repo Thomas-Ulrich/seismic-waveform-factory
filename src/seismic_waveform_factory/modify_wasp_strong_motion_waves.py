@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
 import json
-from config.loader import ConfigLoader
-from config.schema import CONFIG_SCHEMA
 
-from waveform_figure_utils import estimate_travel_time
+from seismic_waveform_factory.config.loader import ConfigLoader
+from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+from seismic_waveform_factory.utils.waveform import estimate_travel_time
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

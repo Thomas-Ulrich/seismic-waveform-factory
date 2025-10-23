@@ -3,9 +3,10 @@ import argparse
 import json
 import os
 
-from utils import cmt
 import numpy as np
-from fault.fault_output import FaultOutput
+
+from seismic_waveform_factory.fault.fault_output import FaultOutput
+from seismic_waveform_factory.utils import cmt
 
 parser = argparse.ArgumentParser(
     description=(
