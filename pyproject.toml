@@ -46,4 +46,3 @@ include-package-data = true
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "dirty-tag"
-
