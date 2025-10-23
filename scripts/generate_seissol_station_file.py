@@ -12,7 +12,7 @@ config.read("waveforms_config.ini")
 station_list = [st.strip() for st in config["GENERAL"]["stations"].split(",")]
 projection = config["GENERAL"]["projection"]
 # Set paths
-waveform_folder = "observations/"
+waveform_folder = config["GENERAL"]["path_observations"]
 
 # Initialize station dictionary
 stations = {}

@@ -33,11 +33,11 @@ def initialize_client(client_name):
                 )
 
 
-def load_cached_station_data(network, stations, level, cache_dir):
+def load_cached_station_data(network, stations, level, path_observations):
     inv = Inventory()
     stations_not_cached = []
     for station in stations:
-        cache_file = os.path.join(cache_dir, f"{network}_{station}_{level}.xml")
+        cache_file = os.path.join(path_observations, f"{network}_{station}_{level}.xml")
         if os.path.exists(cache_file):
             print(f"Loading cached data for {network}.{station}")
             station_inv = read_inventory(cache_file)
@@ -48,14 +48,14 @@ def load_cached_station_data(network, stations, level, cache_dir):
     return inv, stations_not_cached
 
 
-def save_station_data(inventory, level, cache_dir):
+def save_station_data(inventory, level, path_observations):
     # Save inventory station-wise regardless of retrieval method
     for net in inventory:
         for sta in net:
             station_inv = Inventory(networks=[net.copy()])
             station_inv[0].stations = [sta]
             station_cache_file = os.path.join(
-                cache_dir, f"{net.code}_{sta.code}_{level}.xml"
+                path_observations, f"{net.code}_{sta.code}_{level}.xml"
             )
             station_inv.write(station_cache_file, format="STATIONXML")
             print(f"Saved station data {net.code}.{sta.code}")
@@ -143,7 +143,15 @@ def filter_channels_by_availability(inventory, starttime, endtime):
 
 
 def get_station_data(
-    client_or_clientname, network, stations, channel, level, t1, t2, network_wise=True
+    client_or_clientname,
+    network,
+    stations,
+    channel,
+    level,
+    t1,
+    t2,
+    path_observations,
+    network_wise=True,
 ):
     exceptions_to_catch = (
         FDSNException,
@@ -152,10 +160,9 @@ def get_station_data(
         gzip.BadGzipFile,
         ConnectionError,
     )
-    cache_dir = "observations"
-    os.makedirs(cache_dir, exist_ok=True)
+    os.makedirs(path_observations, exist_ok=True)
     inv, stations_not_cached = load_cached_station_data(
-        network, stations, level, cache_dir
+        network, stations, level, path_observations
     )
     if not stations_not_cached:
         return inv
@@ -191,7 +198,7 @@ def get_station_data(
                 )
 
                 inv.extend(inventory)
-                save_station_data(inventory, level, cache_dir)
+                save_station_data(inventory, level, path_observations)
                 break
             except exceptions_to_catch as e:
                 if retry_count == max_retries - 1:
@@ -256,15 +263,19 @@ def get_pre_filt(selected_band):
         return [0.001, 0.005, 45, 50]
 
 
-def select_band_with_data(stream, channels, priorities=["B", "H", "E", "M", "L"]):
+def select_band_with_data(
+    stream, channels, is_regional, priorities=["B", "H", "E", "M", "L"]
+):
     """Select a band based on priority, considering only channels with actual data.
 
     :param stream: ObsPy Stream object containing retrieved waveform data.
     :param channels: List of channel codes from the inventory.
     :return: The selected band, or None if no suitable band has data.
     """
-    for band in priorities:
-        for sub_band in ["N", "H"]:
+    instrument_codes = ["N", "H"] if is_regional else ["H"]
+
+    for sub_band in instrument_codes:
+        for band in priorities:
             full_band = band + sub_band
             if any(channel.startswith(full_band) for channel in channels):
                 # Check if the stream contains data for this band
@@ -282,6 +293,7 @@ def _retrieve_waveforms(
     t2,
     output_format,
     selected_channels,
+    is_regional,
 ):
     level = "response"
     client_initialized = False
@@ -338,6 +350,7 @@ def _retrieve_waveforms(
                 level,
                 t1,
                 t2,
+                path_observations,
                 network_wise=True,
             )
         else:
@@ -349,6 +362,7 @@ def _retrieve_waveforms(
                 level,
                 t1,
                 t2,
+                path_observations,
                 network_wise=False,
             )
         if len(inventory) == 0:
@@ -377,7 +391,7 @@ def _retrieve_waveforms(
             st_obs0.attach_response(inventory)
 
             # Dynamically select a band with actual data
-            selected_band = select_band_with_data(st_obs0, channels)
+            selected_band = select_band_with_data(st_obs0, channels, is_regional)
             if not selected_band:
                 print(f"No valid waveform data at station {station.code}")
                 continue
@@ -578,6 +592,7 @@ def handle_station(
     output_format,
     processed_data,
     channel,
+    is_regional,
 ):
     """Handle a single station: read preprocessed or retrieve raw waveforms."""
     network, station = code.split(".")
@@ -605,6 +620,7 @@ def handle_station(
         endtime,
         output_format,
         channel,
+        is_regional,
     )
     if code in retrieved_waveforms_tmp:
         return code, retrieved_waveforms_tmp[code]
@@ -624,6 +640,7 @@ def retrieve_waveforms(
     output_format="mseed",
     parallel=False,
     channel="*",
+    is_regional=True,
 ):
     retrieved_waveforms = {}
     assert output_format in ["sac", "mseed"]
@@ -638,6 +655,7 @@ def retrieve_waveforms(
         processed_data=processed_data,
         output_format=output_format,
         channel=channel,
+        is_regional=is_regional,
     )
 
     if parallel:

@@ -298,6 +298,8 @@ for syn_name, syn_types in syn_info.items():
         merged[kind]["stations"].update(info["stations"])
         merged[kind]["duration"] = max(merged[kind]["duration"], info["duration"])
 
+
+is_regional = not "instaseis" in syn_types
 retrieved_waveforms = {}
 for kind_vd in merged.keys():
     duration = merged[kind_vd]["duration"]
@@ -312,6 +314,7 @@ for kind_vd in merged.keys():
         starttime,
         endtime,
         processed_data=processed_data,
+        is_regional=is_regional,
     )
 
 

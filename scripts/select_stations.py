@@ -646,6 +646,7 @@ def select_stations(
             processed_data=processed_data,
             output_format=store_format,
             channel=channel,
+            is_regional=not is_teleseismic,
         )
 
         retrieved_codes = list(retrieved_waveforms.keys())
