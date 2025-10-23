@@ -3,7 +3,7 @@ general:
   figure_extension: pdf
   font_size: 8
   relative_offset: 0.0
-  global_legend_labels: []
+  global_legend_labels: ["dyn80"]
   projection: +proj=tmerc +datum=WGS84 +k=0.9996 +lon_0=78.65 +lat_0=41.26
   hypocenter: {lon: 78.6538, lat: 41.2555, depth_in_km: 13.0, onset: '2024-01-22T18:09:04.340Z'}
   #client: earthscope
@@ -24,12 +24,13 @@ synthetics:
     fmax: 1.0
     duration: 200.0
     velocity_model: axitra_velocity_model.txt
-    source_files: [ PointSourceFile_dyn_0000_coh0.25_1.0_B0.9_C0.1_R0.55_extracted_dx20.0_nz4.h5 ]
+    source_files: [ PointSourceFile_dyn_0080_coh0.25_1.0_B0.95_C0.15_R0.95_extracted_dx250.0_nz1.h5 ]
 waveform_plots:
   - type: generic
     enabled: true
     misfit: auto
-    synthetics: [axitra_1]
+    #synthetics: [axitra_1]
+    synthetics: []
     kind: velocity
     stations: [G.WUS, KC.TARG, KR.PRZ, KR.KDJ, KR.NRN, QZ.SHLS, KZ.PDGK, QZ.TLG, KR.BOOM,
       KZ.KNDC]

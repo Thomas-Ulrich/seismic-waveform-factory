@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
-import configparser
+import argparse
 import glob
+import os
 
 from obspy import read_inventory
 from pyproj import Transformer
+from seismic_waveform_factory.config.loader import ConfigLoader
+from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+from seismic_waveform_factory.config.utils import categorize_stations_by_scale
 
-# Load the configuration file
-config = configparser.ConfigParser()
-config.read("waveforms_config.ini")
+parser = argparse.ArgumentParser(description=("generate seissol station file"))
+parser.add_argument("config_file", help="configuration file")
+args = parser.parse_args()
+
+assert os.path.isfile(args.config_file), f"{args.config_file} not found"
+cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
+print(cfg["general"]["setup_name"])
+
 
 # Extract station information
-station_list = [st.strip() for st in config["GENERAL"]["stations"].split(",")]
-projection = config["GENERAL"]["projection"]
+station_list = categorize_stations_by_scale(cfg)["regional"]
+print(station_list)
+
+projection = cfg["general"]["projection"]
 # Set paths
-waveform_folder = config["GENERAL"]["path_observations"]
+waveform_folder = cfg["general"]["path_observations"]
 
 # Initialize station dictionary
 stations = {}
