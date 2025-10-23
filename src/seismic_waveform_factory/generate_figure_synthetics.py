@@ -7,8 +7,8 @@ from itertools import cycle
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from config_loader import ConfigLoader
-from config_schema import CONFIG_SCHEMA
+from config.loader import ConfigLoader
+from config.schema import CONFIG_SCHEMA
 from obspy import UTCDateTime
 from obspy.geodetics import degrees2kilometers, locations2degrees
 from obspy.geodetics.base import gps2dist_azimuth
@@ -208,7 +208,7 @@ for i, wf_syn_config in enumerate(cfg["synthetics"]):
 def generate_synthetics(wf_syn_config, station_coords, syn_type):
     source_files = wf_syn_config["source_files"]
     if syn_type == "instaseis":
-        from instaseis_routines import generate_synthetics_instaseis
+        from simulation.instaseis import generate_synthetics_instaseis
 
         list_synthetics = generate_synthetics_instaseis(
             wf_syn_config["db"],
@@ -223,7 +223,7 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
         )
 
     elif syn_type == "seissol":
-        from seissol_receiver_processing import collect_seissol_synthetics
+        from simulation.seissol import collect_seissol_synthetics
 
         assert projection is not None
         list_synthetics = collect_seissol_synthetics(
@@ -235,7 +235,7 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
             if os.path.isfile(os.path.join(my_path, "axitra")):
                 sys.path.append(my_path.strip())
                 break
-        from axitra_routines import generate_synthetics_axitra
+        from simulation.axitra import generate_synthetics_axitra
 
         list_synthetics = generate_synthetics_axitra(
             source_files,
@@ -249,7 +249,7 @@ def generate_synthetics(wf_syn_config, station_coords, syn_type):
         )
 
     elif syn_type == "pyprop8":
-        from pyprop8_routines import generate_synthetics_pyprop8
+        from simulation.pyprop8 import generate_synthetics_pyprop8
 
         list_synthetics = generate_synthetics_pyprop8(
             source_files,

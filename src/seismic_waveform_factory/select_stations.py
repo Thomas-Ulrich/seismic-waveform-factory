@@ -6,9 +6,9 @@ import random
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from config_loader import ConfigLoader
-from config_schema import CONFIG_SCHEMA
-from config_utils import (
+from config.loader import ConfigLoader
+from config.schema import CONFIG_SCHEMA
+from config.utils import (
     determine_config_scale,
     categorize_waveform_kind_by_scale,
     extract_instaseis_db,

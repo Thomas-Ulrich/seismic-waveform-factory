@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import json
-from config_loader import ConfigLoader
-from config_schema import CONFIG_SCHEMA
+from config.loader import ConfigLoader
+from config.schema import CONFIG_SCHEMA
 
 from waveform_figure_utils import estimate_travel_time
 

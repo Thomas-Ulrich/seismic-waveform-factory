@@ -3,8 +3,8 @@ import argparse
 import glob
 import os
 import shutil
-from config_loader import ConfigLoader
-from config_schema import CONFIG_SCHEMA
+from config.loader import ConfigLoader
+from config.schema import CONFIG_SCHEMA
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

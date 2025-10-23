@@ -3,9 +3,9 @@ import argparse
 import json
 import os
 
-import cmt
+from utils import cmt
 import numpy as np
-from faultoutput import FaultOutput
+from fault.fault_output import FaultOutput
 
 parser = argparse.ArgumentParser(
     description=(

@@ -10,8 +10,9 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
-from config_loader import ConfigLoader
-from config_schema import CONFIG_SCHEMA
+from config.loader import ConfigLoader
+from config.schema import CONFIG_SCHEMA
+from config.utils import categorize_stations_by_scale
 from fault_processing import compute_shapely_polygon
 from geodetic_utils import add_distance_backazimuth_to_df
 from obspy import UTCDateTime, read_inventory
@@ -19,7 +20,6 @@ from obspy.core.inventory import Inventory
 from pyproj import Transformer
 from retrieve_waveforms import initialize_client
 from scalebar import scale_bar
-from config_utils import categorize_stations_by_scale
 
 
 def retrieve_coordinates(cfg, station_codes):
