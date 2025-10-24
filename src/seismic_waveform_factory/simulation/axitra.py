@@ -1,4 +1,3 @@
-import cmt
 import h5py
 import numpy as np
 from axitra import Axitra, moment
@@ -7,6 +6,8 @@ from obspy.imaging.beachball import MomentTensor, mt2plane
 from pyproj import Transformer
 from scipy.signal import fftconvolve
 from tqdm import tqdm
+
+from seismic_waveform_factory.utils import cmt
 
 
 def create_axitra_station_file(station_coords):
@@ -29,7 +30,10 @@ def create_axitra_source_from_h5(filename):
         sources[:, 1] = xyz[:, 1]
         sources[:, 2] = xyz[:, 0]
         sources[:, 3] = -xyz[:, 2]
-        assert h5f.attrs["coordinates_convention"] == "geographic"
+        convention = h5f.attrs["coordinates_convention"]
+        assert convention == "geographic", (
+            f"Expected coordinates_convention='geographic', " f"got '{convention}'"
+        )
 
     hist = np.zeros((nsource, 8))
     delay = 0

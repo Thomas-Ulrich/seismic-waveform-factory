@@ -1,6 +1,5 @@
 import os
 
-import cmt
 import h5py
 import numpy as np
 import pyprop8 as pp
@@ -10,6 +9,8 @@ from pyproj import Transformer
 from pyprop8.utils import make_moment_tensor, rtf2xyz
 from scipy.signal import fftconvolve
 from tqdm import tqdm
+
+from seismic_waveform_factory.utils import cmt
 
 
 def create_pyprop8_receivers(station_coords, transformer):
@@ -38,7 +39,7 @@ def create_pyprop8_source_list_from_h5(filename):
         xyz = h5f["xyz"][:, :]
         moment_tensors = h5f["moment_tensors"][:, :]
         dt = h5f["dt"][0]
-        assert h5f.attrs["coordinates_convention"] == b"geographic"
+        assert h5f.attrs["coordinates_convention"] == "geographic"
 
     latlon = True
     if not latlon:

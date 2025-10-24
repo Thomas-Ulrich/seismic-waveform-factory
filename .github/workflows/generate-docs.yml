@@ -25,7 +25,7 @@ jobs:
 
       - name: Generate INI documentation
         run: |
-          python tools/generate_ini_doc_from_scripts.py scripts/config_schema.py docs
+          python tools/generate_ini_doc_from_scripts.py src/seismic_waveform_factory/config/schema.py docs
 
       - name: Build Sphinx HTML docs
         run: |
