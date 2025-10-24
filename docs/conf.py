@@ -9,7 +9,7 @@ project = "seismic-waveform-factory"
 copyright = "2025, Thomas Ulrich"
 author = "Thomas Ulrich"
 
-release = "0.1.0"
+release = "0.2.0"
 
 extensions = [
     "sphinx.ext.autodoc",
