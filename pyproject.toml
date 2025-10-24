@@ -26,6 +26,7 @@ dependencies = [
     "obspy",
     "pandas",
     "pyproj",
+    "pyprop8",
     "pyvista",
     "requests",
     "scikit-learn",
