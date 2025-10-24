@@ -13,6 +13,7 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 from obspy import UTCDateTime, read_inventory
 from obspy.core.inventory import Inventory
 from pyproj import Transformer
+from geographiclib.geodesic import Geodesic
 
 from seismic_waveform_factory.config.loader import ConfigLoader
 from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
@@ -21,6 +22,41 @@ from seismic_waveform_factory.fault.fault_processing import compute_shapely_poly
 from seismic_waveform_factory.geo.utils import add_distance_backazimuth_to_df
 from seismic_waveform_factory.utils.scalebar import scale_bar
 from seismic_waveform_factory.waveform.retrieve import initialize_client
+
+
+def add_great_circle_radius(ax, event, radius_deg=30):
+    geod = Geodesic.WGS84
+    lons_circle = []
+    lats_circle = []
+    for az in np.linspace(0, 360, 361):
+        g = geod.ArcDirect(event["lat"], event["lon"], az, radius_deg)
+        lons_circle.append(g["lon2"])
+        lats_circle.append(g["lat2"])
+    ax.plot(
+        lons_circle,
+        lats_circle,
+        transform=ccrs.Geodetic(),
+        color="grey",
+        linestyle="--",
+        linewidth=0.5,
+        zorder=2,
+    )
+    # --- Annotate the radius at the bottom of the circle (azimuth 180°) ---
+    g_bottom = geod.ArcDirect(event["lat"], event["lon"], 180, radius_deg)
+    lon_text, lat_text = g_bottom["lon2"], g_bottom["lat2"]
+
+    ax.text(
+        lon_text,
+        lat_text - 0.5,  # small offset southward for readability
+        f"{radius_deg}°",
+        color="k",
+        ha="center",
+        va="top",
+        transform=ccrs.Geodetic(),
+        bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=1.5),
+    )
+
+    return ax
 
 
 def retrieve_coordinates(cfg, station_codes):
@@ -204,6 +240,8 @@ def generate_station_map(df, cfg, set_global=False):
     if set_global:
         ax.set_global()
         map_type = "teleseismic"
+        ax = add_great_circle_radius(ax, event, radius_deg=30)
+        ax = add_great_circle_radius(ax, event, radius_deg=60)
     else:
         map_type = "regional"
         # Add scale bar
