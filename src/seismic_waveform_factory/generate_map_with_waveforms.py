@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import configparser
+import argparse
 import glob
+import os
 
 # from mpl_toolkits.basemap import Basemap
 import cartopy.crs as ccrs
@@ -10,23 +11,36 @@ import numpy as np
 from obspy import read, read_inventory
 from obspy.core import UTCDateTime
 
-# Load the configuration file
-config = configparser.ConfigParser()
-config.read("waveforms_config.ini")
+from seismic_waveform_factory.config.loader import ConfigLoader
+from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+
+parser = argparse.ArgumentParser(
+    description="generate map with waveform at each station location"
+)
+parser.add_argument("config_file", help="config file describing event and stations")
+parser.add_argument(
+    "plot_panel", help="panel from which to extract waveforms", type=int
+)
+args = parser.parse_args()
+cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
 
 # Extract station information
-station_list = [st.strip() for st in config["GENERAL"]["stations"].split(",")]
+panel = args.plot_panel
+wf_plot = cfg["waveform_plots"][panel]
+station_list = wf_plot["stations"]
+kind_vd = wf_plot["kind"]
+print(station_list)
 
-hypo_lat = float(config["GENERAL"]["hypo_lat"])
-hypo_lon = float(config["GENERAL"]["hypo_lon"])
-hypo_depth = float(config["GENERAL"]["hypo_depth_in_km"])
-origin_time = UTCDateTime(config["GENERAL"]["onset"])
+event = cfg["general"]["hypocenter"]
+hypo_lat = event["lat"]
+hypo_lon = event["lon"]
+origin_time = UTCDateTime(event["onset"])
 
-filter_fmin = 1.0 / config.getfloat("P_WAVE", "filter_tmax")
-filter_fmax = 1.0 / config.getfloat("P_WAVE", "filter_tmin")
+filter_fmin = 1.0 / wf_plot["filter_tmax"]
+filter_fmax = 1.0 / wf_plot["filter_tmin"]
 
 # Set paths
-waveform_folder = "observations/"
+waveform_folder = cfg["general"]["path_observations"]
 
 # Initialize station dictionary
 stations = {}
@@ -36,14 +50,16 @@ for station in station_list:
     net, sta = station.split(".")
 
     # Find waveform file
-    waveform_file = glob.glob(f"{waveform_folder}{net}.{sta}_HN_acceleration_*.mseed")
+    pattern = f"{waveform_folder}/{net}.{sta}_*H_{kind_vd}_*.mseed"
+    waveform_file = glob.glob(pattern)
+
     if not waveform_file:
-        print(f"Warning: No waveform found for {station}")
+        print(f"Warning: No waveform found for {station} with pattern {pattern}")
         continue
     waveform_file = waveform_file[0]
 
     # Find response file
-    response_file = glob.glob(f"{waveform_folder}{net}_{sta}_response.xml")
+    response_file = glob.glob(f"{waveform_folder}/{net}_{sta}_response.xml")
     if not response_file:
         print(f"Warning: No response found for {station}")
         continue
@@ -155,6 +171,11 @@ for station, info in stations.items():
 
     # Plot waveform near station
     ax.plot(x + time * 0.005, y + waveform * 0.2, "k", lw=1)
-plt.savefig("map.png")
+fname = "map_with_waveform.png"
+plt.savefig(fname)
+print(f"done generating {fname}")
+full_path = os.path.abspath(fname)
+print(f"full path: {full_path}")
+
 # Show the plot
 # plt.show()

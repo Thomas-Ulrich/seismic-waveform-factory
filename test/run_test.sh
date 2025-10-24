@@ -13,17 +13,17 @@
 ../src/seismic_waveform_factory/select_stations.py waveforms_config_teleseismic_sources.yaml 8 0 --channel "B*" --station_kind global
 
 ../src/seismic_waveform_factory/generate_figure_synthetics.py waveforms_config_regional_sources.yaml
-../src/seismic_waveform_factory/generate_seissol_station_file.py waveforms_config_regional_sources.yaml
+../src/seismic_waveform_factory/generate_figure_synthetics.py waveforms_config_teleseismic_sources.yaml
 
+../src/seismic_waveform_factory/generate_seissol_station_file.py waveforms_config_regional_sources.yaml
 
 ../src/seismic_waveform_factory/plot_station_map.py waveforms_config_regional_sources.yaml
 ../src/seismic_waveform_factory/plot_station_map.py waveforms_config_teleseismic_sources.yaml
 
+../src/seismic_waveform_factory/generate_map_with_waveforms.py waveforms_config_regional_sources.yaml 0
 
 ../src/seismic_waveform_factory/source_parameters_2_moment_tensor.py
 
-# These 3 latter scripts are not tested yet
-
-#../src/seismic_waveform_factory/generate_map_with_waveforms.py
+# These 2 latter scripts are not tested yet
 #../src/seismic_waveform_factory/modify_wasp_strong_motion_waves.py
 #../src/seismic_waveform_factory/copy_selected_sac_data_to_folder.py
