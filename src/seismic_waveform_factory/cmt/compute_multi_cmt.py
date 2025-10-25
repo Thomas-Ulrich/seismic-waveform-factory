@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import copy
 
 import numpy as np
 
@@ -163,8 +164,11 @@ def main(args):
             "locations": axyz,
             "segment_indices": segment_indices,
         }
-
-    json_str = json.dumps(vars(args))
+    # Deep copy to avoid modifying the real one
+    args_copy = copy.deepcopy(vars(args))
+    # Remove non-serializable fields
+    args_copy.pop("func", None)
+    json_str = json.dumps(args_copy)
 
     prefix = os.path.basename(args.filename.split("-fault")[0])
     if args.command == "temporal":

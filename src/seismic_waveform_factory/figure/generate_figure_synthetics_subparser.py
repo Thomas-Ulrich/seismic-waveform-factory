@@ -6,7 +6,7 @@ def add_parser(subparsers):
 
     # defer importing the heavy main function until execution
     def run(args):
-        from seismic_waveform_factory.figure.generate_figure_syntetics import main
+        from seismic_waveform_factory.figure.generate_figure_synthetics import main
 
         main(args)
 

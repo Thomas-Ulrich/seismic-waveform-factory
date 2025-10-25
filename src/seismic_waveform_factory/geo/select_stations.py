@@ -26,7 +26,7 @@ from seismic_waveform_factory.fault.fault_processing import (
     get_fault_slip_coords,
 )
 from seismic_waveform_factory.geo.utils import add_distance_backazimuth_to_df
-from seismic_waveform_factory.plot_station_map import generate_station_map
+from seismic_waveform_factory.figure.plot_station_map import generate_station_map
 from seismic_waveform_factory.waveform.retrieve import (
     filter_channels_by_availability,
     initialize_client,

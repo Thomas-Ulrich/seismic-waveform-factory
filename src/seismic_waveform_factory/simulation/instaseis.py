@@ -8,7 +8,12 @@ import numpy as np
 import pyproj
 from obspy import Stream, Trace, read
 from obspy.imaging.beachball import MomentTensor, mt2plane
-from scipy.signal import hann
+
+try:
+    from scipy.signal import hann
+except ImportError:
+    from scipy.signal.windows import hann
+
 from tqdm import tqdm
 
 from seismic_waveform_factory.utils.cmt import compute_seismic_moment
