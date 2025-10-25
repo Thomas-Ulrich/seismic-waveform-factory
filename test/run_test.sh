@@ -1,8 +1,8 @@
 #!/bin/bash
 
-../src/seismic_waveform_factory/compute_multi_cmt.py spatial data/dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.xdmf 25e9 --use_geometric_center --slip_threshold " -1e9"  --DH 30 --NZ 1 --proj "+proj=tmerc +datum=WGS84 +k=0.9996 +lon_0=78.65 +lat_0=41.26"
+swf compute-multi-cmt spatial data/dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.xdmf 25e9 --use_geometric_center --slip_threshold " -1e9"  --DH 30 --NZ 1 --proj "+proj=tmerc +datum=WGS84 +k=0.9996 +lon_0=78.65 +lat_0=41.26"
 
-../src/seismic_waveform_factory/plot_stf_cmt.py PointSourceFile_dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest_dx30.0_nz1.h5
+swf plot-stf-cmt PointSourceFile_dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest_dx30.0_nz1.h5
 ../src/seismic_waveform_factory/get_focal_mechanism_multi_cmt.py PointSourceFile_dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest_dx30.0_nz1.h5
 ../src/seismic_waveform_factory/plot_map_cmt.py PointSourceFile_dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest_dx30.0_nz1.h5
 

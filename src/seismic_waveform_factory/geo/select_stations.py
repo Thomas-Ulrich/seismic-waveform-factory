@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import argparse
 import os
 import random
 from copy import deepcopy
@@ -240,58 +239,6 @@ def select_teleseismic_stations_aiming_for_azimuthal_coverage(
     df_remaining = df[~df["station"].isin(df_selected["station"])]
 
     return df_selected.reset_index(drop=True), df_remaining.reset_index(drop=True)
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Select stations ensuring optimal coverage for an earthquake.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-
-    # Positional arguments
-    parser.add_argument("config_file", help="yaml config file describing the event.")
-    parser.add_argument(
-        "number_stations", type=int, help="Total number of stations to select."
-    )
-    parser.add_argument(
-        "closest_stations", type=int, help="Number of closest stations to select."
-    )
-
-    # Optional arguments
-    parser.add_argument(
-        "--distance_range",
-        type=float,
-        nargs=2,
-        metavar=("MIN", "MAX"),
-        help="Distance range (degrees) from which to select stations.",
-    )
-    parser.add_argument(
-        "--channel",
-        default="*",
-        type=str,
-        help='Filter channels to be retrieved (default "*" = all channels).',
-    )
-    parser.add_argument(
-        "--store_format",
-        choices=["sac", "mseed"],
-        default="mseed",
-        type=str,
-        help="Storage format for waveform data.",
-    )
-    parser.add_argument(
-        "--azimuthal",
-        action="store_true",
-        help="Select stations based on back-azimuth instead of distance.",
-    )
-    parser.add_argument(
-        "--station_kind",
-        choices=["auto", "regional", "global"],
-        default="auto",
-        type=str,
-        help="kind of stations to select.",
-    )
-
-    return parser.parse_args()
 
 
 def normalize_bounds(spatial_range, r1):
@@ -723,8 +670,7 @@ def select_stations(
         yaml_dump(cfg.config, out_fname)
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
+def main(args):
     select_stations(
         args.config_file,
         args.number_stations,

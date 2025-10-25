@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import argparse
 import glob
 import os
 
@@ -10,10 +9,10 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+from geographiclib.geodesic import Geodesic
 from obspy import UTCDateTime, read_inventory
 from obspy.core.inventory import Inventory
 from pyproj import Transformer
-from geographiclib.geodesic import Geodesic
 
 from seismic_waveform_factory.config.loader import ConfigLoader
 from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
@@ -257,14 +256,7 @@ def generate_station_map(df, cfg, set_global=False):
     print(f"done writing {fn}")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="generate station map")
-    parser.add_argument("config_file", help="config file describing event and stations")
-    parser.add_argument(
-        "--plot_all_station_file",
-        action="store_true",
-    )
-    args = parser.parse_args()
+def main(args):
     cfg = ConfigLoader(args.config_file, CONFIG_SCHEMA)
 
     station_codes = categorize_stations_by_scale(cfg)
