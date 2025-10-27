@@ -1,0 +1,49 @@
+general:
+  setup_name: 7000lsze_regional
+  figure_extension: pdf
+  font_size: 8
+  relative_offset: 0.0
+  global_legend_labels: [model42]
+  projection: +proj=tmerc +datum=WGS84 +k=0.9996 +lon_0=78.65 +lat_0=41.26
+  hypocenter: {lon: 78.6538, lat: 41.2555, depth_in_km: 13.0, onset: '2024-01-22T18:09:04.340Z'}
+  client: iris
+  line_colors: [r, b, pink, g]
+  line_widths: [1.0]
+  path_observations: ./regional_observations
+  fault_file: data/dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.xdmf
+  misfit: cross-correlation
+synthetics:
+  - type: seissol
+    name: seissol_1
+    outputs: []
+  - type: axitra
+    name: axitra_1
+    path: [/dss/dsshome1/0A/di73yeq4/axitra/MOMENT_DISP_F90_OPENMP/src,
+          /import/cachemiss-dump/ulrich/axitra/MOMENT_DISP_F90_OPENMP/src,
+          /home/ulrich/axitra/MOMENT_DISP_F90_OPENMP/src]
+    fmax: 1.0
+    duration: 200.0
+    velocity_model: data/axitra_velocity_model.txt
+    source_files: [ PointSourceFile_dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest_dx30.0_nz1.h5 ]
+processed_waveforms: {directory: '', wf_kind: velocity, wf_factor: 1.0}
+waveform_plots:
+  - type: generic
+    enabled: true
+    misfit: auto
+    synthetics: [axitra_1]
+    kind: velocity
+    stations: [G.WUS, KC.TARG, KR.PRZ, KR.KDJ, KR.NRN, QZ.SHLS, KZ.PDGK, QZ.TLG,
+          KZ.KNDC, KR.BOOM]
+    t_before: 0.0
+    t_after: 150.0
+    taper: true
+    normalize: false
+    shift_match_correlation: false
+    scaling: 1.0
+    filter_tmin: 10.0
+    filter_tmax: 100.0
+    ncol_per_component: 1
+    annotations:
+      fields: [distance, azimuth, misfit]
+      distance_unit: auto
+    components: [E, N, Z]

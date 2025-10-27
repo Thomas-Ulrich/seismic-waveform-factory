@@ -1,0 +1,170 @@
+<?xml version="1.0" ?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="2.0">
+ <Domain>
+  <Grid Name="TimeSeries" GridType="Collection" CollectionType="Temporal">
+   <Grid Name="step_0" GridType="Uniform">
+    <Topology TopologyType="Triangle" NumberOfElements="24516">
+     <DataItem NumberType="Int" Precision="8" Format="HDF" Dimensions="24516 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/connect</DataItem>
+    </Topology>
+    <Geometry name="geo" GeometryType="XYZ" NumberOfElements="12477">
+     <DataItem NumberType="Float" Precision="8" Format="HDF" Dimensions="12477 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/geometry</DataItem>
+    </Geometry>
+    <Time Value="0.0"/>
+    <Attribute Name="ASl" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">0 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="1 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/ASl</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sls" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">0 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="1 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sls</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sld" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">0 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="1 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sld</DataItem>
+     </DataItem>
+    </Attribute>
+   </Grid>
+   <Grid Name="step_1" GridType="Uniform">
+    <Topology TopologyType="Triangle" NumberOfElements="24516">
+     <DataItem NumberType="Int" Precision="8" Format="HDF" Dimensions="24516 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/connect</DataItem>
+    </Topology>
+    <Geometry name="geo" GeometryType="XYZ" NumberOfElements="12477">
+     <DataItem NumberType="Float" Precision="8" Format="HDF" Dimensions="12477 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/geometry</DataItem>
+    </Geometry>
+    <Time Value="4.0"/>
+    <Attribute Name="ASl" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">1 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="2 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/ASl</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sls" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">1 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="2 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sls</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sld" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">1 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="2 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sld</DataItem>
+     </DataItem>
+    </Attribute>
+   </Grid>
+   <Grid Name="step_2" GridType="Uniform">
+    <Topology TopologyType="Triangle" NumberOfElements="24516">
+     <DataItem NumberType="Int" Precision="8" Format="HDF" Dimensions="24516 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/connect</DataItem>
+    </Topology>
+    <Geometry name="geo" GeometryType="XYZ" NumberOfElements="12477">
+     <DataItem NumberType="Float" Precision="8" Format="HDF" Dimensions="12477 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/geometry</DataItem>
+    </Geometry>
+    <Time Value="8.0"/>
+    <Attribute Name="ASl" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">2 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="3 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/ASl</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sls" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">2 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="3 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sls</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sld" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">2 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="3 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sld</DataItem>
+     </DataItem>
+    </Attribute>
+   </Grid>
+   <Grid Name="step_3" GridType="Uniform">
+    <Topology TopologyType="Triangle" NumberOfElements="24516">
+     <DataItem NumberType="Int" Precision="8" Format="HDF" Dimensions="24516 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/connect</DataItem>
+    </Topology>
+    <Geometry name="geo" GeometryType="XYZ" NumberOfElements="12477">
+     <DataItem NumberType="Float" Precision="8" Format="HDF" Dimensions="12477 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/geometry</DataItem>
+    </Geometry>
+    <Time Value="12.0"/>
+    <Attribute Name="ASl" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">3 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="4 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/ASl</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sls" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">3 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="4 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sls</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sld" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">3 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="4 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sld</DataItem>
+     </DataItem>
+    </Attribute>
+   </Grid>
+   <Grid Name="step_4" GridType="Uniform">
+    <Topology TopologyType="Triangle" NumberOfElements="24516">
+     <DataItem NumberType="Int" Precision="8" Format="HDF" Dimensions="24516 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/connect</DataItem>
+    </Topology>
+    <Geometry name="geo" GeometryType="XYZ" NumberOfElements="12477">
+     <DataItem NumberType="Float" Precision="8" Format="HDF" Dimensions="12477 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/geometry</DataItem>
+    </Geometry>
+    <Time Value="16.0"/>
+    <Attribute Name="ASl" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">4 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="5 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/ASl</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sls" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">4 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="5 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sls</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sld" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">4 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="5 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sld</DataItem>
+     </DataItem>
+    </Attribute>
+   </Grid>
+   <Grid Name="step_5" GridType="Uniform">
+    <Topology TopologyType="Triangle" NumberOfElements="24516">
+     <DataItem NumberType="Int" Precision="8" Format="HDF" Dimensions="24516 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/connect</DataItem>
+    </Topology>
+    <Geometry name="geo" GeometryType="XYZ" NumberOfElements="12477">
+     <DataItem NumberType="Float" Precision="8" Format="HDF" Dimensions="12477 3">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/geometry</DataItem>
+    </Geometry>
+    <Time Value="20.0"/>
+    <Attribute Name="ASl" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">5 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="6 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/ASl</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sls" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">5 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="6 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sls</DataItem>
+     </DataItem>
+    </Attribute>
+    <Attribute Name="Sld" Center="Cell">
+     <DataItem ItemType="HyperSlab" Dimensions="24516">
+      <DataItem NumberType="UInt" Precision="4" Format="XML" Dimensions="3 2">5 0 1 1 1 24516</DataItem>
+      <DataItem NumberType="Float" Precision="4" Format="HDF" Dimensions="6 24516">dyn_0042_coh0.25_1.0_B1.0_C0.3_R0.55_extractedtest-fault.h5:/Sld</DataItem>
+     </DataItem>
+    </Attribute>
+   </Grid>
+  </Grid>
+ </Domain>
+</Xdmf>

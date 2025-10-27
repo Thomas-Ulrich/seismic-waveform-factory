@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+import h5py
+from obspy.imaging.beachball import MomentTensor, mt2plane
+
+
+def main(args):
+    h5f = h5py.File(args.filename, "r")
+    aMomentTensor = h5f["moment_tensors"][:, :]
+    nsource = aMomentTensor.shape[0]
+    print("source\tstrike\tdip\trake")
+    for i in range(nsource):
+        mt = MomentTensor(aMomentTensor[i, :], 1)
+        nodalplane = mt2plane(mt)
+        print(f"{i}\t{nodalplane.strike}\t{nodalplane.dip}\t{nodalplane.rake}")

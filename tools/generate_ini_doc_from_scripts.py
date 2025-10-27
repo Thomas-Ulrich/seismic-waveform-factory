@@ -7,7 +7,7 @@ from textwrap import indent
 
 def load_schema(schema_path):
     """Dynamically load CONFIG_SCHEMA from a Python file."""
-    spec = importlib.util.spec_from_file_location("config_schema", schema_path)
+    spec = importlib.util.spec_from_file_location("schema", schema_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     if not hasattr(module, "CONFIG_SCHEMA"):

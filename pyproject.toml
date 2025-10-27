@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seismic-waveform-factory"
+dynamic = ["version"]
+description = "Tools for generating and analyzing synthetic seismic waveforms"
+authors = [
+    { name = "Thomas Ulrich"}
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "argcomplete",
+    "cartopy",
+    "geopandas",
+    "geopy",
+    "h5py",
+    "hinetpy",
+    "instaseis; python_version >= '3.11'",
+    "lxml",
+    "matplotlib",
+    "networkx",
+    "numpy",
+    "obspy",
+    "pandas",
+    "pyproj",
+    "pyprop8",
+    "pyvista",
+    "requests",
+    "ruamel.yaml",
+    "scikit-learn",
+    "scipy",
+    "seissolxdmf",
+    "shapely",
+    "tqdm",
+    "trimesh",
+    "vtk",
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "dirty-tag"
+
+[project.scripts]
+swf = "seismic_waveform_factory.cli:main"
