@@ -49,3 +49,4 @@ Quick Start
 
 
    Example configuration files (`*.yaml`) and usage examples (`run_test.sh`) are provided in the repository, folder `test`.
+   To enable autocomplete, add to your `~/bashrc`: `eval "$(register-python-argcomplete swf)"`.

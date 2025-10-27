@@ -6,7 +6,9 @@ def add_parser(subparsers):
 
     # defer importing the heavy main function until execution
     def run(args):
-        from seismic_waveform_factory.scripts.generate_seissol_station_file import main
+        from seismic_waveform_factory.seissol_utils.generate_station_file import (
+            main,
+        )
 
         main(args)
 
