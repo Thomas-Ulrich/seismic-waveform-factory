@@ -19,7 +19,7 @@ dependencies = [
     "geopy",
     "h5py",
     "hinetpy",
-    "instaseis",
+    "instaseis; python_version >= '3.11'",
     "lxml",
     "matplotlib",
     "networkx",
@@ -38,6 +38,7 @@ dependencies = [
     "trimesh",
     "vtk",
 ]
+
 
 [tool.setuptools.packages.find]
 where = ["src"]
