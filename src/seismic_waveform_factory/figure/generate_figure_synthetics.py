@@ -134,7 +134,7 @@ def main(args):
     station_codes = list(station_codes)
 
     station_coords = compile_station_coords_main(
-        station_codes, station_file, client_name, t1
+        station_codes, station_file, client_name, t1, path_observations
     )
     station_coords = reorder_station_coords_from_azimuth(
         station_coords, hypo["lon"], hypo["lat"]
