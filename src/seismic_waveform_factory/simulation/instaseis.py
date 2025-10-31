@@ -308,9 +308,11 @@ def generate_synthetics_instaseis_green(
     if hdf5_file in hdf5_dictionnaries.keys():
         hdf5_dict = hdf5_dictionnaries[hdf5_file]
     else:
-        hdf5_dict = load_hdf5_to_dict(hdf5_file)
-        hdf5_dictionnaries[hdf5_file] = hdf5_dict
-
+        if os.path.exists(hdf5_file):
+            hdf5_dict = load_hdf5_to_dict(hdf5_file)
+            hdf5_dictionnaries[hdf5_file] = hdf5_dict
+        else:
+            hdf5_dict = {}
     synthetics = Stream()
 
     for station_code in station_coords:
