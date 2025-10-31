@@ -256,15 +256,17 @@ def get_waveforms(client, network, station, selected_band, t1, t2):
     return st_obs0
 
 
-def get_pre_filt(selected_band):
-    if selected_band == "L":
-        return [0.00033, 0.001, 0.1, 0.3]
-    else:
-        return [0.001, 0.005, 45, 50]
+def get_pre_filt(is_regional, fs):
+    nyq = fs / 2
+    f1 = 0.001 if is_regional else 0.00033
+    f2 = 0.005 if is_regional else 0.001
+    f3 = min(15, nyq * 0.8)  # passband end
+    f4 = min(30, nyq * 0.95)  # high cut
+    return [f1, f2, f3, f4]
 
 
 def select_band_with_data(
-    stream, channels, is_regional, priorities=["B", "H", "E", "M", "L"]
+    stream, channels, is_regional, priorities=["B", "H", "E", "M"]
 ):
     """Select a band based on priority, considering only channels with actual data.
 
@@ -410,17 +412,31 @@ def _retrieve_waveforms(
                 "velocity": "VEL",
                 "displacement": "DISP",
             }
-            pre_filt = get_pre_filt(selected_band)
+            pre_filt = get_pre_filt(is_regional, fs=st_obs0[0].stats.sampling_rate)
+
+            def get_water_level(output, instrument_code):
+                """
+                adapt water_level to instrument measured quantity
+                (see warning in)
+                https://docs.obspy.org/master/packages/autogen/
+                obspy.core.trace.Trace.remove_response.html
+                """
+                if output == "VEL" and instrument_code == "H":
+                    return 60.0
+                elif output == "ACC" and instrument_code == "N":
+                    return 60.0
+                else:
+                    return None
+
+            water_level = get_water_level(
+                output_dic[kind_vd], st_obs0[0].stats.channel[1]
+            )
 
             try:
                 st_obs0.remove_response(
                     output=output_dic[kind_vd],
                     pre_filt=pre_filt,
-                    # todo: use water_level if kind_vd == instrument measured quantity
-                    # (see warning in)
-                    # https://docs.obspy.org/master/packages/autogen/
-                    # obspy.core.trace.Trace.remove_response.html
-                    water_level=None,
+                    water_level=water_level,
                     zero_mean=True,
                     taper=True,
                     taper_fraction=0.05,

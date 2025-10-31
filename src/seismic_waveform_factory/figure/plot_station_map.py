@@ -81,6 +81,7 @@ def retrieve_coordinates(cfg, station_codes):
 
     df = pd.DataFrame(rows, columns=["network", "station", "longitude", "latitude"])
     df["code"] = df["network"] + "." + df["station"]
+    df = df.drop_duplicates(subset=["code"]).reset_index(drop=True)
     print(df)
 
     missing = [code for code in station_codes if code not in df["code"].values]

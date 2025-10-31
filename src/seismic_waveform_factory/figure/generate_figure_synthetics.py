@@ -12,6 +12,7 @@ from obspy.geodetics.base import gps2dist_azimuth
 
 from seismic_waveform_factory.config.loader import ConfigLoader
 from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+from seismic_waveform_factory.config.utils import determine_config_scale
 from seismic_waveform_factory.figure.generator import WaveformFigureGenerator
 from seismic_waveform_factory.utils.waveform import (
     compile_station_coords_main,
@@ -44,7 +45,7 @@ def main(args):
             return source_files
         for source_file in wf_syn_config["source_files"]:
             if os.path.isfile(source_file):
-                if source_file.endswith(".h5"):
+                if source_file.endswith(".h5") or source_file.endswith(".param"):
                     all_files.append(source_file)
             # check for all point source files in the folder
             elif os.path.isdir(source_file):
@@ -289,7 +290,9 @@ def main(args):
             merged[kind]["stations"].update(info["stations"])
             merged[kind]["duration"] = max(merged[kind]["duration"], info["duration"])
 
-    is_regional = "instaseis" not in syn_types
+    config_scale = determine_config_scale(cfg)
+    is_regional = config_scale["regional"]
+
     retrieved_waveforms = {}
     for kind_vd in merged.keys():
         duration = merged[kind_vd]["duration"]
