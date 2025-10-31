@@ -136,11 +136,7 @@ def main(args):
     station_coords = compile_station_coords_main(
         station_codes, station_file, client_name, t1, path_observations
     )
-    station_coords = reorder_station_coords_from_azimuth(
-        station_coords, hypo["lon"], hypo["lat"]
-    )
     print(station_coords)
-
     sta_infos = {}
 
     for ins, station_code in enumerate(station_coords):
@@ -273,6 +269,10 @@ def main(args):
                 code: station_coords[code]
                 for code in syn_info[syn_name][kind_vd]["stations"]
             }
+            selected_station_coords = reorder_station_coords_from_azimuth(
+                selected_station_coords, hypo["lon"], hypo["lat"]
+            )
+
             syn_type = wf_syn_config["type"]
             st, duration = generate_synthetics(
                 wf_syn_config, selected_station_coords, syn_type
