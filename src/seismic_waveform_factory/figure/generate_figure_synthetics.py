@@ -360,7 +360,7 @@ def main(args):
                         "outputs", []
                     )
                     src.extend([(name, pt_source) for pt_source in pt_sources])
-            src_loop_up[f"{wf_plot.plt_id}"] = pt_sources
+            src_loop_up[f"{wf_plot.plt_id}"] = src
     print(src_loop_up)
 
     print("goodness of fit (gof) per station:")
