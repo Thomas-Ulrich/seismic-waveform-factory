@@ -180,12 +180,13 @@ def get_station_data(
         retry_message = f"network {network} at station(s) {station}"
         max_retries = 5
         for retry_count in range(max_retries):
+            kargs = {}
+            base_url = getattr(client_or_clientname, "base_url", "")
+            if "geofon" not in base_url:
+                kargs["includeavailability"] = True
             try:
                 if retry_count == 0:
                     print(f"Getting {level}s for {retry_message}...")
-                kargs = {}
-                if "geofon" not in client_or_clientname.base_url:
-                    kargs["includeavailability"] = True
 
                 inventory = client_or_clientname.get_stations(
                     network=network,
