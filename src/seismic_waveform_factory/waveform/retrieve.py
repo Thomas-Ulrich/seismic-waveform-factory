@@ -421,12 +421,10 @@ def _retrieve_waveforms(
                 https://docs.obspy.org/master/packages/autogen/
                 obspy.core.trace.Trace.remove_response.html
                 """
-                if output == "VEL" and instrument_code == "H":
-                    return 60.0
-                elif output == "ACC" and instrument_code == "N":
-                    return 60.0
-                else:
+                if output == "ACC" and instrument_code == "H":
                     return None
+                else:
+                    return 60.0
 
             water_level = get_water_level(
                 output_dic[kind_vd], st_obs0[0].stats.channel[1]
