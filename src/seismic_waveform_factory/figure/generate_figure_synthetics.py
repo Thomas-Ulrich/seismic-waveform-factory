@@ -315,7 +315,15 @@ def main(args):
         if wf_plot.enabled:
             print(wf_plot.plt_cfg)
             kind_vd = wf_plot.plt_cfg["kind"]
-            for ins, code in enumerate(wf_plot.plt_cfg["stations"]):
+            selected_station_coords = {
+                code: station_coords[code] for code in wf_plot.plt_cfg["stations"]
+            }
+
+            selected_station_coords = reorder_station_coords_from_azimuth(
+                selected_station_coords, hypo["lon"], hypo["lat"]
+            )
+
+            for ins, code in enumerate(selected_station_coords.keys()):
                 lst = []
                 network, station = code.split(".")
                 st_obs0 = retrieved_waveforms[kind_vd][code]
