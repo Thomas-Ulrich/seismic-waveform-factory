@@ -12,6 +12,7 @@ from obspy.geodetics.base import gps2dist_azimuth
 
 from seismic_waveform_factory.config.loader import ConfigLoader
 from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
+from seismic_waveform_factory.config.utils import determine_config_scale
 from seismic_waveform_factory.figure.generator import WaveformFigureGenerator
 from seismic_waveform_factory.utils.waveform import (
     compile_station_coords_main,
@@ -44,7 +45,7 @@ def main(args):
             return source_files
         for source_file in wf_syn_config["source_files"]:
             if os.path.isfile(source_file):
-                if source_file.endswith(".h5"):
+                if source_file.endswith(".h5") or source_file.endswith(".param"):
                     all_files.append(source_file)
             # check for all point source files in the folder
             elif os.path.isdir(source_file):
@@ -133,13 +134,9 @@ def main(args):
     station_codes = list(station_codes)
 
     station_coords = compile_station_coords_main(
-        station_codes, station_file, client_name, t1
-    )
-    station_coords = reorder_station_coords_from_azimuth(
-        station_coords, hypo["lon"], hypo["lat"]
+        station_codes, station_file, client_name, t1, path_observations
     )
     print(station_coords)
-
     sta_infos = {}
 
     for ins, station_code in enumerate(station_coords):
@@ -272,6 +269,10 @@ def main(args):
                 code: station_coords[code]
                 for code in syn_info[syn_name][kind_vd]["stations"]
             }
+            selected_station_coords = reorder_station_coords_from_azimuth(
+                selected_station_coords, hypo["lon"], hypo["lat"]
+            )
+
             syn_type = wf_syn_config["type"]
             st, duration = generate_synthetics(
                 wf_syn_config, selected_station_coords, syn_type
@@ -289,7 +290,9 @@ def main(args):
             merged[kind]["stations"].update(info["stations"])
             merged[kind]["duration"] = max(merged[kind]["duration"], info["duration"])
 
-    is_regional = "instaseis" not in syn_types
+    config_scale = determine_config_scale(cfg)
+    is_regional = config_scale["regional"]
+
     retrieved_waveforms = {}
     for kind_vd in merged.keys():
         duration = merged[kind_vd]["duration"]
@@ -312,7 +315,15 @@ def main(args):
         if wf_plot.enabled:
             print(wf_plot.plt_cfg)
             kind_vd = wf_plot.plt_cfg["kind"]
-            for ins, code in enumerate(wf_plot.plt_cfg["stations"]):
+            selected_station_coords = {
+                code: station_coords[code] for code in wf_plot.plt_cfg["stations"]
+            }
+
+            selected_station_coords = reorder_station_coords_from_azimuth(
+                selected_station_coords, hypo["lon"], hypo["lat"]
+            )
+
+            for ins, code in enumerate(selected_station_coords.keys()):
                 lst = []
                 network, station = code.split(".")
                 st_obs0 = retrieved_waveforms[kind_vd][code]
@@ -349,7 +360,7 @@ def main(args):
                         "outputs", []
                     )
                     src.extend([(name, pt_source) for pt_source in pt_sources])
-            src_loop_up[f"{wf_plot.plt_id}"] = pt_sources
+            src_loop_up[f"{wf_plot.plt_id}"] = src
     print(src_loop_up)
 
     print("goodness of fit (gof) per station:")

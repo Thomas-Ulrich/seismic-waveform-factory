@@ -69,13 +69,17 @@ def compile_missing_stations(station_codes, station_coords_all):
     return missing_stations
 
 
-def download_station_coords(station_codes, client_name, t1):
-    list_inventory = compile_list_inventories(client_name, station_codes, t1)
+def download_station_coords(station_codes, client_name, t1, path_observations):
+    list_inventory = compile_list_inventories(
+        client_name, station_codes, t1, path_observations
+    )
     print([f"{inv[0][0].code}" for inv in list_inventory])
     return compile_station_coords(list_inventory)
 
 
-def compile_station_coords_main(station_codes, station_file, client_name, t1):
+def compile_station_coords_main(
+    station_codes, station_file, client_name, t1, path_observations
+):
     station_coords = {}
     if station_file:
         station_coords_all = compile_station_coords_csv(station_codes, station_file)
@@ -85,7 +89,9 @@ def compile_station_coords_main(station_codes, station_file, client_name, t1):
     if len(station_coords) < len(station_codes):
         missing_stations = compile_missing_stations(station_codes, station_coords)
         print(missing_stations)
-        downloaded_coords = download_station_coords(missing_stations, client_name, t1)
+        downloaded_coords = download_station_coords(
+            missing_stations, client_name, t1, path_observations
+        )
         station_coords = {**station_coords, **downloaded_coords}
     return station_coords
 
@@ -95,9 +101,8 @@ def parse_network_station(netStaCode):
     return ("*", parts[0]) if len(parts) == 1 else (parts[0], parts[1])
 
 
-def compile_list_inventories(client_name, station_codes, t1):
+def compile_list_inventories(client_name, station_codes, t1, cache_dir):
     # Prepare cache directory
-    cache_dir = "observations"
     os.makedirs(cache_dir, exist_ok=True)
 
     def fetch_inventory(netStaCode):
