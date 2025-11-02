@@ -135,7 +135,7 @@ def main(args):
                 color = "b"
 
             si = segment_indices_selected[isrc]
-            xy = xyz_selected[isrc, 0:2] + np.array([0, args.shift * si[1]])
+            xy = xyz_selected[isrc, 0:2] + np.array(args.shift) * si[1]
 
             beach1 = beach(
                 moment_tensor,

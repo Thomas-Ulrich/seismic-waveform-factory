@@ -44,8 +44,10 @@ def add_parser(subparsers):
     )
     parser.add_argument(
         "--shift",
-        default=0.0,
-        help="shift the rows of beach ball by shift for each row (useful if dip=90)",
+        nargs=2,
+        metavar=("x0", "y0"),
+        default=[0, 0],
+        help="shift beach ball rows by (x0,y0) for each row (useful for dip=90)",
         type=float,
     )
     parser.add_argument(
