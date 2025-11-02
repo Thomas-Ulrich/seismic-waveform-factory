@@ -88,23 +88,27 @@ with open(args.filename) as fh:
     if not line.startswith("#Total number of fault_segments"):
         raise ValueError("Not a valid USGS param file.")
     nseg = int(line.split()[-1])
-    fault_tag = 65
 
     # parse all segments
-    for _ in range(nseg):
+    for p in range(nseg):
+        fault_tag = 3 if p == 0 else 64 + p
         sources = []
         axyz = []
         amt = []
         aNormMRF = []
         segment_indices = []
         # got to point source segment
+        nx = 1
         for line in fh:
             # line = line.decode()
+            if "#Fault_segment" in line:
+                items = line.split()
+                nx = int(items[4])
+                ny = int(items[9])
             if "#Lat. Lon. depth" in line:
                 break
-        k = 0
         # read all point sources until reaching next segment
-        for line in fh:
+        for k, line in enumerate(fh):
             # line = line.decode()
             if "#Fault_segment" in line:
                 break
@@ -152,8 +156,10 @@ with open(args.filename) as fh:
 
             axyz.append([lon, lat, dep])
             amt.append(mt)
-            segment_indices.append((0, k))
-            k += 1
+            j = k // nx
+            i = k - j * nx
+            segment_indices.append((i, j))
+            assert npts >= (tinit + trise + tfall) / dt
             stf = asymmetric_cosine(trise, tfall, npts, dt)
             stf = np.roll(stf, round(tinit / dt))
             aNormMRF.append(stf)
@@ -164,7 +170,6 @@ with open(args.filename) as fh:
         "locations": np.array(axyz),
         "segment_indices": np.array(segment_indices),
     }
-    fault_tag += 1
 
 proj = True
 potency = False
