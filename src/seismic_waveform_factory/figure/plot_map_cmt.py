@@ -47,7 +47,9 @@ def setup_map(ax, MapBoundaries, grid_spacing, gridlines_left=True):
 def main(args):
     h5f = h5py.File(args.filename, "r")
     moment_tensors = h5f["moment_tensors"][:, :]
-    nsrc = moment_tensors.shape[0]
+    segment_indices = h5f["segment_indices"][:, :]
+    fault_tags = h5f["fault_tags"][:]
+
     xyz = h5f["xyz"][:, :]
     h5f.close()
     xyz[:, 0] += args.x0y0proj[0]
@@ -67,10 +69,10 @@ def main(args):
         ymin = np.amin(xyz[:, 1])
         ymax = np.amax(xyz[:, 1])
         dx = max(ymax - ymin, xmax - xmin, 0.1)
-        xmin = xmin - 0.2 * dx
-        xmax = xmax + 0.2 * dx
-        ymin = ymin - 0.2 * dx
-        ymax = ymax + 0.2 * dx
+        xmin = xmin - 0.3 * dx
+        xmax = xmax + 0.3 * dx
+        ymin = ymin - 0.3 * dx
+        ymax = ymax + 0.3 * dx
         args.MapBoundaries = [xmin, xmax, ymin, ymax]
     print(
         f"lon_min, lon_max {args.MapBoundaries[0:2]}, \
@@ -101,26 +103,49 @@ def main(args):
 
     cmap = matplotlib.colormaps["twilight"]
 
+    nsrc = moment_tensors.shape[0]
+    aMw = np.zeros((nsrc,))
     for isrc in range(nsrc):
         M0all = cmt.compute_seismic_moment(moment_tensors[isrc, :])
-        Mw = 2.0 / 3.0 * np.log10(M0all) - 6.07
-        print(f"{isrc:5d}: {Mw:.2f}", end=" ")
-        if isrc % 10 == 9:
-            print()
-        moment_tensor = cmt.RTP2NED(moment_tensors[isrc, :] / M0all)
+        aMw[isrc] = 2.0 / 3.0 * np.log10(M0all) - 6.07
 
-        color = cmap(isrc / nsrc)
-        if args.unicolor:
-            color = "b"
-        beach1 = beach(
-            moment_tensor[:],
-            xy=xyz[isrc, 0:2],
-            width=Mw * args.beachSize[0] * 0.01,
-            linewidth=0.2,
-            mopad_basis="NED",
-            facecolor=color,
-        )
-        ax.add_collection(beach1)
+    unique_tags = np.unique(fault_tags)
+    for tag in unique_tags:
+        print(f"processing segment tagged {tag}...")
+        ids = np.where(fault_tags == tag)
+
+        moment_tensors_selected = moment_tensors[ids]
+        segment_indices_selected = segment_indices[ids]
+        xyz_selected = xyz[ids]
+        aMw_seleted = aMw[ids]
+        mw_average = np.average(aMw_seleted)
+
+        nsrc = moment_tensors.shape[0]
+
+        for isrc in range(nsrc):
+            Mw = aMw_seleted[isrc]
+
+            print(f"{isrc:5d}: {Mw:.2f}", end=" ")
+            if isrc % 10 == 9:
+                print()
+            moment_tensor = cmt.RTP2NED(moment_tensors_selected[isrc, :] / M0all)
+
+            color = cmap(isrc / nsrc)
+            if args.unicolor:
+                color = "b"
+
+            si = segment_indices_selected[isrc]
+            xy = xyz_selected[isrc, 0:2] + np.array([0, args.shift * si[1]])
+
+            beach1 = beach(
+                moment_tensor,
+                xy=xy,
+                width=(Mw / mw_average) ** 2 * args.beachSize[0] * 0.04,
+                linewidth=0.2,
+                mopad_basis="NED",
+                facecolor=color,
+            )
+            ax.add_collection(beach1)
 
     if not args.unicolor:
         norm = matplotlib.colors.Normalize(vmin=0, vmax=nsrc)
