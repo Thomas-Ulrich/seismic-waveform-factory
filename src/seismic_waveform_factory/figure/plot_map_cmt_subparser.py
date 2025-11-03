@@ -42,7 +42,14 @@ def add_parser(subparsers):
         help="size of scale bar in km",
         type=float,
     )
-
+    parser.add_argument(
+        "--shift",
+        nargs=2,
+        metavar=("x0", "y0"),
+        default=[0, 0],
+        help="shift beach ball rows by (x0,y0) for each row (useful for dip=90)",
+        type=float,
+    )
     parser.add_argument(
         "--MapBoundaries",
         nargs=4,

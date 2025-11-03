@@ -26,6 +26,12 @@ def main(args):
         print("plotting all STF")
         args.idSTF = list(range(0, nsources))
 
+    sSTF = np.sum(STF, axis=0)
+    M0 = np.trapezoid(sSTF, dx=dt)
+    Mw_event = 2.0 / 3.0 * np.log10(M0) - 6.07
+    peak_STF = np.amax(sSTF)
+    print(f"Mw event: {Mw_event} (M0 = {M0} Nm/s, peak {peak_STF}Nm/s)")
+
     time = np.linspace(0, (ndt - 1) * dt, ndt)
     # cols = "bgrcykb"
 
@@ -42,6 +48,7 @@ def main(args):
         ax.set_xlim([0, args.time_range[1] - args.time_range[0]])
     else:
         ax.set_xlim([0, ndt * dt])
+
     ax.set_ylim(bottom=0.0)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)

@@ -192,6 +192,7 @@ class WaveformFigureGenerator:
                 axi = axarr[i, j]
                 if self.plt_cfg["normalize"]:
                     axi.spines["left"].set_visible(False)
+                    axi.yaxis.set_visible(False)
                 if j > 0 and generic_plot:
                     axi.sharey(axarr[i, 0])
                     axi.spines["left"].set_visible(False)
@@ -361,7 +362,7 @@ class WaveformFigureGenerator:
             else:
                 otrace = otraces[0]
             scaling, annot = self.compute_scaling(otrace, reftime)
-            vmax_annot.append(annot)
+            vmax_annot = [annot] + vmax_annot
             self.axarr[ins, j0].plot(
                 otrace.times(reftime=reftime),
                 scaling * otrace.data,
@@ -414,7 +415,8 @@ class WaveformFigureGenerator:
                         gofstring = "\n" + " ".join(gofstrings)
                         annot += [f"{gofstring}"]
                     if self.plt_cfg["normalize"]:
-                        annot += ["\n".join(vmax_annot)]
+                        annot += "\n"
+                        annot += [" ".join(vmax_annot)]
                 annotations = " ".join(annot)
                 loc = "upper" if (y0 - ymin0) / (ymax0 - ymin0) < 0.5 else "lower"
                 if len(annot):
