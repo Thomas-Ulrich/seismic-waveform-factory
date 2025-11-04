@@ -1,3 +1,6 @@
+import argparse
+
+
 def add_parser(subparsers_top):
     parser = subparsers_top.add_parser(
         "compute-multi-cmt",
@@ -10,6 +13,7 @@ def add_parser(subparsers_top):
     spatial = subparsers.add_parser(
         "spatial",
         help="Divide fault along horizontal vector Vh and Uz",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     spatial.add_argument(
@@ -23,6 +27,7 @@ def add_parser(subparsers_top):
     temporal = subparsers.add_parser(
         "temporal",
         help="Divide fault with time and Uz",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     temporal.add_argument(

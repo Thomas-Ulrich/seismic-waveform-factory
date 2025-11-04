@@ -1,6 +1,11 @@
+import argparse
+
+
 def add_parser(subparsers):
     parser = subparsers.add_parser(
-        "plot-stf-cmt", help="Plot source time functions from a multi-CMT file"
+        "plot-stf-cmt",
+        help="Plot source time functions from a multi-CMT file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("filename", help="Moment Tensor (h5)")
     parser.add_argument(

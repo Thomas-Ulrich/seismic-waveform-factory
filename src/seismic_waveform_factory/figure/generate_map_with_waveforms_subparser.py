@@ -1,6 +1,11 @@
+import argparse
+
+
 def add_parser(subparsers):
     parser = subparsers.add_parser(
-        "gen-map-waveforms", help="Generate map with waveforms from configuration file"
+        "gen-map-waveforms",
+        help="Generate map with waveforms from configuration file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("config_file", help="config file describing event and stations")
     parser.add_argument(

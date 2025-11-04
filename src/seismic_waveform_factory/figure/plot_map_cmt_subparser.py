@@ -1,6 +1,11 @@
+import argparse
+
+
 def add_parser(subparsers):
     parser = subparsers.add_parser(
-        "plot-map-cmt", help="Plot a map including beachballs from multi-CMT file"
+        "plot-map-cmt",
+        help="Plot a map including beachballs from multi-CMT file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument("filename", help="point source file (h5)")

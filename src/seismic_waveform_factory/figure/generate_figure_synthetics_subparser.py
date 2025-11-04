@@ -1,6 +1,11 @@
+import argparse
+
+
 def add_parser(subparsers):
     parser = subparsers.add_parser(
-        "plot-waveforms", help="Generate waveform figures from configuration file"
+        "plot-waveforms",
+        help="Generate waveform figures from configuration file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("config_file", help="configuration file")
 
