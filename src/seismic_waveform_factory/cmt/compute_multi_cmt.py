@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
+import copy
 import json
 import os
-import copy
 
 import numpy as np
 

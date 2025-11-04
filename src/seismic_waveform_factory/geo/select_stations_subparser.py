@@ -1,7 +1,11 @@
+import argparse
+
+
 def add_parser(subparsers):
     parser = subparsers.add_parser(
         "select-stations",
         help="Select stations ensuring optimal coverage from configuration file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     # Positional arguments

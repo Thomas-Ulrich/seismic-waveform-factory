@@ -1,7 +1,9 @@
-import numpy as np
-from seismic_waveform_factory.utils import cmt
 import argparse
 import os
+
+import numpy as np
+
+from seismic_waveform_factory.utils import cmt
 
 # some code adapted from https://instaseis.net/_modules/instaseis/source.html
 

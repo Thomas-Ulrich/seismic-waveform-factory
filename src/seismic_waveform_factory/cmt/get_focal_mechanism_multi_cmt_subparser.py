@@ -1,6 +1,11 @@
+import argparse
+
+
 def add_parser(subparsers):
     parser = subparsers.add_parser(
-        "get-focal-mech", help="Extract focal mechanism from multi-CMT file"
+        "get-focal-mech",
+        help="Extract focal mechanism from multi-CMT file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("filename", help="point source file (h5)")
 

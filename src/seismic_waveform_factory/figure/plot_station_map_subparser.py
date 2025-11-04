@@ -1,6 +1,11 @@
+import argparse
+
+
 def add_parser(subparsers):
     parser = subparsers.add_parser(
-        "plot-station-map", help="Plot station map from configuration file"
+        "plot-station-map",
+        help="Plot station map from configuration file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("config_file", help="config file describing event and stations")
     parser.add_argument("--plot_all_station_file", action="store_true")
