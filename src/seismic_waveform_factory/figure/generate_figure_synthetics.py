@@ -53,7 +53,15 @@ def main(args):
                 files_in_folder = glob.glob(pattern)
                 print(files_in_folder)
                 all_files.extend(files_in_folder)
-        source_files = list(set(all_files))
+
+        # remove duplicates but keep order
+        seen = set()
+        source_files = []
+        for f in all_files:
+            if f not in seen:
+                seen.add(f)
+                source_files.append(f)
+
         syn_name = wf_syn_config["name"]
         print(f"{len(source_files)} source file(s) found for syn {syn_name}")
         return source_files
