@@ -191,8 +191,7 @@ class WaveformFigureGenerator:
             for i in range(nrow):
                 axi = axarr[i, j]
                 if self.plt_cfg["normalize"]:
-                    axi.spines["left"].set_visible(False)
-                    axi.yaxis.set_visible(False)
+                    axi.set_yticks([])
                 if j > 0 and generic_plot:
                     axi.sharey(axarr[i, 0])
                     axi.spines["left"].set_visible(False)
@@ -211,31 +210,40 @@ class WaveformFigureGenerator:
         self.fig, self.axarr = fig, axarr
 
     def add_global_legend(self):
+        # Adjust figure to make room for the legend
+        self.fig.subplots_adjust(top=0.88)
         # Add an invisible axis for the legend above the figure
-        self.fig.subplots_adjust(top=0.88)  # Make some room at the top
         self.legend_ax = self.fig.add_axes([0.1, 0.9, 0.8, 0.05], frameon=False)
         self.legend_ax.axis("off")
-        # Define one Line2D for each synthetic model and observation
+
         handles = []
+        labels = []
         nlabels = len(self.global_legend_labels)
         ncol = self.ncol_per_component * self.ncomp
+
         for idx in range(nlabels):
             if idx > len(self.line_widths) - 1:
                 color = "k"
                 line_width = self.line_widths[-1]
             else:
-                color = color = self.colors[idx]
+                color = self.colors[idx]
                 line_width = self.line_widths[idx]
+
+            if color == "k":
+                continue
             line = mlines.Line2D([], [], color=color, linewidth=line_width)
             handles.append(line)
+            labels.append(self.global_legend_labels[idx])
 
-        self.legend_ax.legend(
-            handles,
-            self.global_legend_labels,
-            loc="center",
-            ncol=ncol,
-            frameon=False,
-        )
+        # Only create legend if there’s something to show
+        if handles:
+            self.legend_ax.legend(
+                handles,
+                labels,
+                loc="center",
+                ncol=ncol,
+                frameon=False,
+            )
 
     def compute_max_abs_value_trace(self, trace, reftime):
         max_abs_value = float("-inf")
