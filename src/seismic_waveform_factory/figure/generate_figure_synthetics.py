@@ -53,7 +53,7 @@ def main(args):
                 files_in_folder = glob.glob(pattern)
                 print(files_in_folder)
                 all_files.extend(files_in_folder)
-        source_files = sorted(list(set(all_files)))
+        source_files = list(set(all_files))
         syn_name = wf_syn_config["name"]
         print(f"{len(source_files)} source file(s) found for syn {syn_name}")
         return source_files
