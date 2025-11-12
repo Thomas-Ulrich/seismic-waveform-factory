@@ -9,8 +9,8 @@ def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):
     along vH and z)"""
     # Useful if large portion of the fault not ruptured
     max_slip = np.amax(fault_slip)
-    if slip_threshold / max_slip > 0.2:
-        print("Warning, slip_threshold is a significant portion of the maximum slip")
+    if max_slip > 0 and slip_threshold / max_slip > 0.2:
+        print("Warning: slip_threshold is a significant portion of the maximum slip")
     if max_slip <= slip_threshold:
         print(f"fault slip is below slip_threshold ({slip_threshold:.2f} m) exiting...")
         sys.exit(0)
@@ -27,8 +27,9 @@ def compute_slices_array(x1, fault_slip, nslices, slip_threshold):
     """Compute a linearly spaces coordinate array (for latter slicing the fault output
     along vH and z)"""
     # Useful if large portion of the fault not ruptured
-    if np.amax(fault_slip) / slip_threshold < 20:
-        print("Warning, slip_threshold is a significant portion of the maximum slip")
+    max_slip = np.amax(fault_slip)
+    if max_slip > 0 and slip_threshold / max_slip > 0.2:
+        print("Warning: slip_threshold is a significant portion of the maximum slip")
     x1_slip = x1[fault_slip > slip_threshold]
     x1min = np.amin(x1_slip)
     x1max = np.amax(x1_slip)
