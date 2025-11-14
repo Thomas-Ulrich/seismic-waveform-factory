@@ -4,12 +4,12 @@ import os
 import sys
 from itertools import cycle
 
+import h5py
 import matplotlib.pyplot as plt
 import pandas as pd
 from obspy import UTCDateTime
 from obspy.geodetics import degrees2kilometers, locations2degrees
 from obspy.geodetics.base import gps2dist_azimuth
-
 from seismic_waveform_factory.config.loader import ConfigLoader
 from seismic_waveform_factory.config.schema import CONFIG_SCHEMA
 from seismic_waveform_factory.config.utils import determine_config_scale
@@ -38,6 +38,11 @@ def main(args):
     print(cfg["general"]["setup_name"])
     # print(cfg["waveform_plots"])
 
+    def has_point_sources(filepath):
+        with h5py.File(filepath, "r") as f:
+            xyz_has_data = "xyz" in f and f["xyz"].shape[0] > 0
+            return xyz_has_data
+
     def collect_synthetic_source_files(wf_syn_config):
         source_files = []
         all_files = []
@@ -60,6 +65,9 @@ def main(args):
         for f in all_files:
             if f not in seen:
                 seen.add(f)
+                if not has_point_sources(f):
+                    print(f"removing {f} since it has no point sources")
+                    continue
                 source_files.append(f)
 
         syn_name = wf_syn_config["name"]

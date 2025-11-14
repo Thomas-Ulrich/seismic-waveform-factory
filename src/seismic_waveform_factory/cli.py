@@ -30,12 +30,9 @@ from seismic_waveform_factory.geo.select_stations_subparser import (
     add_parser as ss_add_parser,
 )
 
-# done
 from seismic_waveform_factory.seissol_utils.generate_station_file_subparser import (
     add_parser as gss_add_parser,
 )
-
-# not done
 
 
 def main():
