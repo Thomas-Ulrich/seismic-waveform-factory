@@ -411,8 +411,9 @@ def main(args):
 
         df_station_average["sim_id"] = (
             df_station_average["src"]
+            .apply(lambda x: x[1] if isinstance(x, tuple) and len(x) > 1 else str(x))
             .str.extract(r"dyn_(\d+)", expand=False)
-            .fillna(-1)  # fallback when regex fails
+            .fillna(-1)
             .astype(int)
         )
 
