@@ -65,7 +65,7 @@ def main(args):
         for f in all_files:
             if f not in seen:
                 seen.add(f)
-                if not has_point_sources(f):
+                if f.endswith(".h5") and not has_point_sources(f):
                     print(f"removing {f} since it has no point sources")
                     continue
                 source_files.append(f)
