@@ -65,7 +65,7 @@ def main(args):
         for f in all_files:
             if f not in seen:
                 seen.add(f)
-                if not has_point_sources(f):
+                if f.endswith(".h5") and not has_point_sources(f):
                     print(f"removing {f} since it has no point sources")
                     continue
                 source_files.append(f)
@@ -125,6 +125,11 @@ def main(args):
             cfg["general"], wf_plot_config, n_syn_models, plt_id
         )
         wf_plots.append(wf_plot)
+
+    one_plot_enabled = any(wf_plot.enabled for wf_plot in wf_plots)
+    if not one_plot_enabled:
+        print("all plot disabled, exiting")
+        return
 
     os.makedirs(cfg["general"]["path_observations"], exist_ok=True)
 
