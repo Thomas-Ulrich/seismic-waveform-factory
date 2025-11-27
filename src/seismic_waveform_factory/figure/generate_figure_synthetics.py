@@ -126,6 +126,11 @@ def main(args):
         )
         wf_plots.append(wf_plot)
 
+    one_plot_enabled = any(wf_plot.enabled for wf_plot in wf_plots)
+    if not one_plot_enabled:
+        print("all plot disabled, exiting")
+        return
+
     os.makedirs(cfg["general"]["path_observations"], exist_ok=True)
 
     processed_data = {}

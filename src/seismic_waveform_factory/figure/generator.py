@@ -138,6 +138,10 @@ class WaveformFigureGenerator:
         self.ncomp = len(self.components)
         self.shift_match_correlation = plt_cfg["shift_match_correlation"]
         nstations = len(plt_cfg["stations"])
+        if nstations == 0:
+            self.enabled = False
+            print(f"disabling plot {plt_id} as it has no stations")
+            return
         self.init_several_stations_figure(nstations)
         self.n_kinematic_models = n_kinematic_models
         if plt_cfg["misfit"] == "auto":
