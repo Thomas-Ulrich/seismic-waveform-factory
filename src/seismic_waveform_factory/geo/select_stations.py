@@ -663,11 +663,7 @@ def select_stations(
                 print(f"stations = [{station_codes}]")
 
     if need_update:
-        # Save to new YAML file
-        out_fname = config_file
-        root, ext = os.path.splitext(config_file)
-        out_fname = f"{root}_sources{ext}"
-        yaml_dump(cfg.config, out_fname)
+        yaml_dump(cfg.config, config_file)
 
 
 def main(args):
