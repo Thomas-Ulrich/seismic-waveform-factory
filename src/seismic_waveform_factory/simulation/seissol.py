@@ -188,7 +188,9 @@ def compile_inv_lut_gm(folder_prefix, projection, station_coords):
     receiver_files = glob.glob(file_pattern)
 
     for fn in receiver_files:
-        id_station = int(fn.split(f"{folder_prefix}-receiver-")[1].split("-")[0])
+        id_station = int(
+            fn.split(f"{folder_prefix}-receiver-")[1].split("-")[0].split(".dat")[0]
+        )
 
         # Load SeisSol receiver coordinates
         xyzs = read_seissol_receiver_file(folder_prefix, id_station, coords_only=True)
