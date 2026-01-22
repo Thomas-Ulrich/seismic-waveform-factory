@@ -70,7 +70,7 @@ def add_fault_components(streams, fault_strike):
         Fault strike angle in degrees.
     """
     theta_fp = np.deg2rad(fault_strike)
-    theta_fn = np.deg2rad(fault_strike + 90)
+    theta_fn = np.deg2rad(fault_strike - 90)
 
     for st in streams:
         trN = st.select(component="N")[0]
@@ -356,9 +356,7 @@ class WaveformFigureGenerator:
             for ist, st in enumerate(lst_copy):
                 strace = st.select(component=comp)[0]
                 scaling, annot = self.compute_scaling(strace, reftime)
-                shift_s = self.compute_shift_correlation(
-                    st, st_obs, self.components, reftime
-                )
+                shift_s = self.compute_shift_correlation(st, st_obs, reftime)
                 vmax_annot.append(annot)
 
                 self.axarr[ins, j0].plot(
@@ -496,23 +494,34 @@ class WaveformFigureGenerator:
 
         return strace, otrace, f0, shiftmax
 
-    def compute_shift_correlation(self, st, st_obs, components, reftime):
-        shift = 0
+    def compute_shift_correlation(self, st, st_obs, reftime):
+        shift_sum = 0.0
+        weight_sum = 0.0
+
         for comp in self.components:
-            shift += self.compute_shift_correlation_one_comp(st, st_obs, comp, reftime)
-        return shift / len(self.components)
+            shift_i, gof_i = self.compute_shift_correlation_one_comp(
+                st, st_obs, comp, reftime
+            )
+            shift_sum += shift_i * gof_i
+            weight_sum += gof_i
+
+        if weight_sum == 0:
+            return 0.0
+
+        return shift_sum / weight_sum
 
     def compute_shift_correlation_one_comp(self, st, st_obs, comp, reftime):
         if not self.shift_match_correlation:
-            return 0
+            return 0.0, 0.0
 
         strace, otrace, f0, shiftmax = self._prepare_traces(st, st_obs, comp, reftime)
         if strace is None:
-            return 0
+            return 0.0, 0.0
 
         cc = correlate(strace, otrace, shift=shiftmax)
         shift, gof = xcorr_max(cc, abs_max=False)
-        return shift / f0
+
+        return shift / f0, gof
 
     def compute_misfit(self, st, st_obs, comp, reftime):
         strace, otrace, f0, shiftmax = self._prepare_traces(st, st_obs, comp, reftime)
