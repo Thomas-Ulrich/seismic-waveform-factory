@@ -302,12 +302,22 @@ CONFIG_SCHEMA = {
             "filter_tmin": {
                 "default": None,
                 "type": float,
-                "doc": "Minimum period (seconds) for filter.",
+                "doc": (
+                    "Minimum period in seconds to be preserved by the filter. "
+                    "If set, periods shorter than filter_tmin are removed "
+                    "(low-pass filter with corner frequency 1 / filter_tmin). "
+                    "If None, no low-pass filtering is applied."
+                ),
             },
             "filter_tmax": {
                 "default": None,
                 "type": float,
-                "doc": "Maximum period (seconds) for filter.",
+                "doc": (
+                    "Maximum period in seconds to be preserved by the filter. "
+                    "If set, periods longer than filter_tmax are removed "
+                    "(high-pass filter with corner frequency 1 / filter_tmax). "
+                    "If None, no high-pass filtering is applied."
+                ),
             },
             "fault_strike": {
                 "default": None,
