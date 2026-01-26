@@ -131,8 +131,8 @@ class WaveformFigureGenerator:
             self.t_before[code] = -get_station_value(plt_cfg, "t_before", code)
             self.t_after[code] = get_station_value(plt_cfg, "t_after", code)
 
-        self.filter_fmin = 1.0 / plt_cfg["filter_tmax"]
-        self.filter_fmax = 1.0 / plt_cfg["filter_tmin"]
+        self.filter_tmin = plt_cfg["filter_tmin"]
+        self.filter_tmax = plt_cfg["filter_tmax"]
         self.enabled = plt_cfg["enabled"]
         self.ncol_per_component = plt_cfg["ncol_per_component"]
         self.ncomp = len(self.components)
@@ -319,13 +319,42 @@ class WaveformFigureGenerator:
                 myst.detrend("demean")
                 myst.detrend("linear")
                 myst.taper(max_percentage=0.05, type="hann")
-            myst.filter(
-                "bandpass",
-                freqmin=self.filter_fmin,
-                freqmax=self.filter_fmax,
-                corners=4,
-                zerophase=True,
-            )
+
+            tmin = self.filter_tmin
+            tmax = self.filter_tmax
+
+            if tmin is None and tmax is None:
+                # no filtering
+                pass
+
+            elif tmin is None:
+                # only maximum period defined → high-pass
+                myst.filter(
+                    "highpass",
+                    freq=1.0 / tmax,
+                    corners=4,
+                    zerophase=True,
+                )
+
+            elif tmax is None:
+                # only minimum period defined → low-pass
+                myst.filter(
+                    "lowpass",
+                    freq=1.0 / tmin,
+                    corners=4,
+                    zerophase=True,
+                )
+
+            else:
+                # bandpass
+                myst.filter(
+                    "bandpass",
+                    freqmin=1.0 / tmax,
+                    freqmax=1.0 / tmin,
+                    corners=4,
+                    zerophase=True,
+                )
+
         st_obs.merge()
         if self.plt_cfg["normalize"]:
             offset = self.relative_offset
@@ -469,7 +498,10 @@ class WaveformFigureGenerator:
         end_time_interp = min(reftime + self.t_after[code], end_osTrace)
 
         # Interpolation frequency
-        f0 = self.filter_fmax * 4.0
+        if self.filter_tmin is None:
+            f0 = 4.0
+        else:
+            f0 = 4.0 / self.filter_tmin
         npts_interp = int(np.floor((end_time_interp - start_time_interp) * f0)) + 1
         if npts_interp < 2:
             return None, None, None, None
@@ -559,12 +591,18 @@ class WaveformFigureGenerator:
             cc = correlate(strace, otrace, shift=shiftmax)
             shift, gof = xcorr_max(cc, abs_max=False)
         elif self.kind_misfit == "time-frequency":
+            tmin = self.filter_tmin
+            tmax = self.filter_tmax
+            assert (
+                tmin is not None or tmax is not None
+            ), "time-frequency gof requires 2 frequencies"
+
             gof_envolope = eg(
                 strace.data,
                 otrace.data,
                 1 / f0,
-                fmin=self.filter_fmin,
-                fmax=self.filter_fmax,
+                fmin=1 / tmax,
+                fmax=1 / tmin,
                 nf=100,
                 w0=6,
                 norm="global",
@@ -575,8 +613,8 @@ class WaveformFigureGenerator:
                 strace.data,
                 otrace.data,
                 1 / f0,
-                fmin=self.filter_fmin,
-                fmax=self.filter_fmax,
+                fmin=1 / tmax,
+                fmax=1 / tmin,
                 nf=100,
                 w0=6,
                 norm="global",
