@@ -40,6 +40,11 @@ dependencies = [
     "vtk",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -53,3 +58,22 @@ local_scheme = "dirty-tag"
 
 [project.scripts]
 swf = "seismic_waveform_factory.cli:main"
+
+
+[tool.pytest.ini_options]
+# Automatically run with coverage on your core source directory
+addopts = "--cov=seismic_waveform_factory --cov-report=term-missing --cov-report=html"
+testpaths = ["test"]
+
+[tool.coverage.run]
+# Tells coverage to look at the source files, not the installed package
+source = ["src/seismic_waveform_factory"]
+
+[tool.coverage.report]
+# Exclude standard boilerplate from your coverage metrics
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError"
+]

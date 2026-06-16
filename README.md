@@ -1,5 +1,7 @@
 # seismic-waveform-factory
 
+[![codecov](https://codecov.io/gh/Thomas-Ulrich/seismic-waveform-factory/branch/main/graph/badge.svg)](https://codecov.io/gh/Thomas-Ulrich/seismic-waveform-factory)
+
 This repository contains a set of Python scripts for earthquake source modeling
  and synthetic seismogram generation.
 It can be used, for example, to generate equivalent multi-CMT solutions and
