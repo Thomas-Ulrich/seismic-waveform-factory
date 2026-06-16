@@ -30,6 +30,7 @@ dependencies = [
     "pyprop8",
     "pyvista",
     "requests",
+    "PyYAML",
     "ruamel.yaml",
     "scikit-learn",
     "scipy",
