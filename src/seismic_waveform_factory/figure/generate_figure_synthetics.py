@@ -368,19 +368,22 @@ def main(args):
                     t_phase = 0.0
                 wf_plot.add_plot_station(st_obs0, lst, t1 + t_phase, ins)
 
+    syn_config_look_up = {
+        wf_syn_config["name"]: wf_syn_config for wf_syn_config in cfg["synthetics"]
+    }
     src_loop_up = {}
     for wf_plot in wf_plots:
         if wf_plot.enabled:
             print(wf_plot.gof_df)
             src = []
             syn_names = wf_plot.plt_cfg["synthetics"]
-            for wf_syn_config in cfg["synthetics"]:
-                name = wf_syn_config["name"]
-                if wf_syn_config["name"] in syn_names:
+            for syn_name in syn_names:
+                if syn_name in syn_config_look_up.keys():
+                    wf_syn_config = syn_config_look_up[syn_name]
                     pt_sources = wf_syn_config.get("source_files") or wf_syn_config.get(
                         "outputs", []
                     )
-                    src.extend([(name, pt_source) for pt_source in pt_sources])
+                    src.extend([(syn_name, pt_source) for pt_source in pt_sources])
             src_loop_up[f"{wf_plot.plt_id}"] = src
     print(src_loop_up)
 
