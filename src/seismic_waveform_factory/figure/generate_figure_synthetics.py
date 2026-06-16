@@ -24,6 +24,27 @@ from seismic_waveform_factory.utils.waveform import (
 from seismic_waveform_factory.waveform.retrieve import retrieve_waveforms
 
 
+def build_src_lookup_for_plots(wf_plots, cfg):
+    """Build src_look_up mapping for GOF attribution."""
+    syn_config_look_up = {
+        wf_syn_config["name"]: wf_syn_config for wf_syn_config in cfg["synthetics"]
+    }
+    src_look_up = {}
+    for wf_plot in wf_plots:
+        if wf_plot.enabled:
+            src = []
+            syn_names = wf_plot.plt_cfg["synthetics"]
+            for syn_name in syn_names:
+                if syn_name in syn_config_look_up.keys():
+                    wf_syn_config = syn_config_look_up[syn_name]
+                    pt_sources = wf_syn_config.get("source_files") or wf_syn_config.get(
+                        "outputs", []
+                    )
+                    src.extend([(syn_name, pt_source) for pt_source in pt_sources])
+            src_look_up[f"{wf_plot.plt_id}"] = src
+    return src_look_up
+
+
 def main(args):
     # Ensure all rows and columns are displayed
     pd.set_option("display.max_rows", None)  # Show all rows
@@ -368,25 +389,8 @@ def main(args):
                     t_phase = 0.0
                 wf_plot.add_plot_station(st_obs0, lst, t1 + t_phase, ins)
 
-    syn_config_look_up = {
-        wf_syn_config["name"]: wf_syn_config for wf_syn_config in cfg["synthetics"]
-    }
-    src_loop_up = {}
-    for wf_plot in wf_plots:
-        if wf_plot.enabled:
-            print(wf_plot.gof_df)
-            src = []
-            syn_names = wf_plot.plt_cfg["synthetics"]
-            for syn_name in syn_names:
-                if syn_name in syn_config_look_up.keys():
-                    wf_syn_config = syn_config_look_up[syn_name]
-                    pt_sources = wf_syn_config.get("source_files") or wf_syn_config.get(
-                        "outputs", []
-                    )
-                    src.extend([(syn_name, pt_source) for pt_source in pt_sources])
-            src_loop_up[f"{wf_plot.plt_id}"] = src
-    print(src_loop_up)
-
+    src_look_up = build_src_lookup_for_plots(wf_plots, cfg)
+    print(src_look_up)
     print("goodness of fit (gof) per station:")
     df_merged = merge_gof_dfs(wf_plots)
 
@@ -413,7 +417,7 @@ def main(args):
         )
         df_station_average["plot_id"] = plot_id
         point_srcs = [
-            src_loop_up[f"{p_id}"][f_id] for (p_id, f_id) in zip(plot_id, file_id)
+            src_look_up[f"{p_id}"][f_id] for (p_id, f_id) in zip(plot_id, file_id)
         ]
         df_station_average["src"] = point_srcs
 
