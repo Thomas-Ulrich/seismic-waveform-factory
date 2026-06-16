@@ -35,3 +35,9 @@ jobs:
       run: |
         # Explicitly setting PYTHONPATH ensuring the src layout is respected
         PYTHONPATH=src pytest
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: Thomas-Ulrich/seismic-waveform-factory
