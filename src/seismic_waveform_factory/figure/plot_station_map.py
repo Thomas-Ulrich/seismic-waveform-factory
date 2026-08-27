@@ -219,7 +219,7 @@ def generate_station_map(df, cfg, set_global=False):
         for poly in polygons:
             x1, y1 = poly.exterior.xy
             x1, y1 = transformer.transform(x1, y1)
-            plt.plot(x1, y1, "b--", zorder=4, transform=geo)
+            plt.plot(x1, y1, "--", zorder=4, transform=geo)
 
     for i in range(len(names)):
         # Create text box with semi-opaque background
