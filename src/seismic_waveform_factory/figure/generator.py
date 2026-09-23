@@ -590,6 +590,25 @@ class WaveformFigureGenerator:
         elif self.kind_misfit == "cross-correlation":
             cc = correlate(strace, otrace, shift=shiftmax)
             shift, gof = xcorr_max(cc, abs_max=False)
+        elif self.kind_misfit == "cc_amplitude_hybrid":
+            # 1. Compute cross-correlation for optimal shift
+            cc = correlate(strace, otrace, shift=shiftmax)
+            shift, max_cc = xcorr_max(cc, abs_max=False)
+
+            # 2. Compute amplitude/energy ratio
+            rms_s = nanrms(strace.data)
+            rms_o = nanrms(otrace.data)
+
+            if rms_s > 0 and rms_o > 0:
+                amp_penalty = abs(np.log(rms_s / rms_o))
+            else:
+                amp_penalty = 1.0
+
+            # 3. Combine phase similarity (max_cc) and energy agreement
+            # Weight parameter (e.g., w_amp = 0.5) balances shape vs. amplitude weight
+            w_amp = 0.3
+            # Exponential conversion to keep GOF in [0, 1] range
+            gof = max_cc * np.exp(-w_amp * amp_penalty)
         elif self.kind_misfit == "time-frequency":
             tmin = self.filter_tmin
             tmax = self.filter_tmax

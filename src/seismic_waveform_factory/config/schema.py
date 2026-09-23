@@ -100,6 +100,7 @@ CONFIG_SCHEMA = {
                     "min_shifted_normalized_rms",
                     "normalized_rms",
                     "cross-correlation",
+                    "cc_amplitude_hybrid",
                     "time-frequency",
                 ],
                 "doc": "Type of misfit metric for comparison.",
