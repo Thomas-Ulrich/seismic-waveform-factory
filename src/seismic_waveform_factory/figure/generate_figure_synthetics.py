@@ -129,7 +129,7 @@ def main(args):
         cfg["general"]["line_colors"], n_syn_model_max, "colors"
     )
     cfg["general"]["line_widths"] = extend_if_necessary(
-        cfg["general"]["line_widths"], n_syn_model_max, "line_widths"
+        cfg["general"]["line_widths"] or [1.0], n_syn_model_max, "line_widths"
     )
 
     plt.rcParams.update({"font.size": cfg["general"]["font_size"]})
@@ -137,7 +137,10 @@ def main(args):
     wf_plots = []
     for plt_id, wf_plot_config in enumerate(cfg["waveform_plots"]):
         if wf_plot_config["annotations"]["distance_unit"] == "auto":
-            unit = "degree" if "instaseis" in syn_types else "km"
+            teleseismic = "instaseis" in syn_types or (
+                not cfg["synthetics"] and wf_plot_config["type"] in ["p", "sh"]
+            )
+            unit = "degree" if teleseismic else "km"
             wf_plot_config["annotations"]["distance_unit"] = unit
         n_syn_models = 0
         for syn_name in wf_plot_config["synthetics"]:
@@ -341,14 +344,42 @@ def main(args):
             merged[kind]["stations"].update(info["stations"])
             merged[kind]["duration"] = max(merged[kind]["duration"], info["duration"])
 
+    # Request observations independently of the synthetic models.
+    phase_dic = {"p": "P", "sh": "S"}
+    phase_times = {}
+    for wf_plot in wf_plots:
+        if not wf_plot.enabled:
+            continue
+        kind = wf_plot.plt_cfg["kind"]
+        info = merged.setdefault(kind, {"stations": set(), "duration": 0.0})
+        for code in wf_plot.plt_cfg["stations"]:
+            t_phase = 0.0
+            if wf_plot.plot_type in phase_dic:
+                t_phase = estimate_travel_time(
+                    hypo["depth_in_km"],
+                    sta_infos[code]["dist"],
+                    code,
+                    phase_dic[wf_plot.plot_type],
+                )
+            phase_times[wf_plot.plt_id, code] = t_phase
+            info["stations"].add(code)
+            info["duration"] = max(info["duration"], t_phase + wf_plot.t_after[code])
+            info["before"] = max(
+                info.get("before", 0.0), -t_phase - wf_plot.t_before[code]
+            )
+
     config_scale = determine_config_scale(cfg)
     is_regional = config_scale["regional"]
+    if not cfg["synthetics"]:
+        is_regional = not any(
+            wf.enabled and wf.plot_type in phase_dic for wf in wf_plots
+        )
 
     retrieved_waveforms = {}
     for kind_vd in merged.keys():
         duration = merged[kind_vd]["duration"]
         extra_time = max(100.0, 0.1 * duration)
-        starttime = t1 - extra_time
+        starttime = t1 - max(extra_time, merged[kind_vd].get("before", 0.0))
         endtime = t1 + duration + extra_time
         retrieved_waveforms[kind_vd] = retrieve_waveforms(
             merged[kind_vd]["stations"],
@@ -361,7 +392,6 @@ def main(args):
             is_regional=is_regional,
         )
 
-    phase_dic = {"p": "P", "sh": "S"}
     for wf_plot in wf_plots:
         if wf_plot.enabled:
             print(wf_plot.plt_cfg)
@@ -388,14 +418,9 @@ def main(args):
                         tr.stats.distance = sta_infos[code]["dist"]
                         tr.stats.distance_km = sta_infos[code]["dist_km"]
 
-                dist = sta_infos[code]["dist"]
-                if wf_plot.plot_type in ["p", "sh"]:
-                    t_phase = estimate_travel_time(
-                        hypo["depth_in_km"], dist, station, phase_dic[wf_plot.plot_type]
-                    )
+                t_phase = phase_times[wf_plot.plt_id, code]
+                if wf_plot.plot_type in phase_dic:
                     wf_plot.set_estimated_travel_time(t_phase)
-                else:
-                    t_phase = 0.0
                 wf_plot.add_plot_station(st_obs0, lst, t1 + t_phase, ins)
 
     src_look_up = build_src_lookup_for_plots(wf_plots, cfg)
