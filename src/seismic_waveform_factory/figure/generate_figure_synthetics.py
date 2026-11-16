@@ -179,6 +179,13 @@ def main(args):
         station_codes, station_file, client_name, t1, path_observations
     )
     print(station_coords)
+    missing_stations = sorted(set(station_codes) - set(station_coords))
+    if missing_stations:
+        raise ValueError(
+            "Could not obtain coordinates for: "
+            + ", ".join(missing_stations)
+            + ". Check the station metadata service or provide a station_file."
+        )
     sta_infos = {}
 
     for ins, station_code in enumerate(station_coords):
@@ -230,6 +237,8 @@ def main(args):
 
     def generate_synthetics(wf_syn_config, station_coords, syn_type):
         source_files = wf_syn_config["source_files"]
+        if syn_type != "seissol" and not source_files:
+            return [], 3600.0
         if syn_type == "instaseis":
             from seismic_waveform_factory.simulation.instaseis import (
                 generate_synthetics_instaseis,
