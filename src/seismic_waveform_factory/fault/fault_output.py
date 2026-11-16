@@ -140,7 +140,7 @@ class FaultOutput:
         high sampling required!!!
         """
         print("computing moment rate function from SR time histories")
-        SRs = fo_SR.sx.ReadData("SRd")
+        SRs = fo_SR.sx.ReadData("SRs")
         SRd = fo_SR.sx.ReadData("SRd")
         same_connect = np.allclose(fo_SR.connect, self.connect)
         same_xyz = np.allclose(fo_SR.xyz, self.xyz)
