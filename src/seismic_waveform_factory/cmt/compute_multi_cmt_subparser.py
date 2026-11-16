@@ -1,6 +1,13 @@
 import argparse
 
 
+def positive_int(value):
+    result = int(value)
+    if result <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return result
+
+
 def add_parser(subparsers_top):
     parser = subparsers_top.add_parser(
         "compute-multi-cmt",
@@ -89,8 +96,12 @@ def add_parser(subparsers_top):
         sp.add_argument(
             "--DH",
             default=20,
-            type=float,
-            help="Max horizontal distance between point sources, in km",
+            type=positive_int if sp is temporal else float,
+            help=(
+                "Number of temporal slices"
+                if sp is temporal
+                else "Max horizontal distance between point sources, in km"
+            ),
         )
 
         sp.add_argument(
@@ -121,8 +132,8 @@ def add_parser(subparsers_top):
         sp.add_argument(
             "--ndt",
             metavar=("ndt"),
-            type=int,
-            help="Use a subset of time frames",
+            type=positive_int,
+            help="Use the first N time frames, including the initial frame",
         )
 
         sp.add_argument(

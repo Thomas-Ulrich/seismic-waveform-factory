@@ -29,6 +29,7 @@ from seismic_waveform_factory.figure.plot_station_map import generate_station_ma
 from seismic_waveform_factory.geo.utils import add_distance_backazimuth_to_df
 from seismic_waveform_factory.waveform.retrieve import (
     filter_channels_by_availability,
+    get_station_data,
     initialize_client,
     retrieve_waveforms,
 )
@@ -633,6 +634,28 @@ def select_stations(
             print("Done selecting stations")
             print(selected_stations)
             break
+
+    # Waveform cache hits bypass metadata retrieval. Ensure responses are
+    # cached for every selected station before updating the configuration.
+    for network, stations in compute_dict_network_station(selected_stations).items():
+        inventory = get_station_data(
+            client,
+            network,
+            stations,
+            "*",
+            "response",
+            starttime,
+            endtime,
+            path_observations,
+            network_wise=False,
+        )
+        cached_codes = {f"{net.code}.{sta.code}" for net in inventory for sta in net}
+        missing = sorted({f"{network}.{sta}" for sta in stations} - cached_codes)
+        if missing:
+            raise RuntimeError(
+                "Could not cache response metadata for selected stations: "
+                + ", ".join(missing)
+            )
 
     generate_station_map(selected_stations, cfg, is_teleseismic)
 

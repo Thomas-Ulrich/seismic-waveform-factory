@@ -310,9 +310,9 @@ def generate_synthetics_instaseis_green(
     else:
         if os.path.exists(hdf5_file):
             hdf5_dict = load_hdf5_to_dict(hdf5_file)
-            hdf5_dictionnaries[hdf5_file] = hdf5_dict
         else:
             hdf5_dict = {}
+        hdf5_dictionnaries[hdf5_file] = hdf5_dict
     synthetics = Stream()
 
     for station_code in station_coords:
@@ -383,6 +383,16 @@ def generate_synthetics_instaseis_green(
                         components=components,
                         traces=st0,
                     )
+                    # Make new entries immediately available to later models.
+                    grp = hdf5_dict
+                    for key in (
+                        station_code,
+                        f"fault_tag_{fault_tag:03d}",
+                        f"segment_{segment[0]:03d}_{segment[1]:03d}",
+                        f"rake_{rake}",
+                    ):
+                        grp = grp.setdefault(key, {})
+                    grp["_stream"] = st0
                     progress_bar.increment(1)
 
                 lst.append(st0)
@@ -481,43 +491,18 @@ class ProgressBar(tqdm):
 
 
 def get_unique_segments_per_tag(source_files):
-    # Step 1: Collect all available fault tags
-    with h5py.File(source_files[0], "r") as h5f:
-        fault_tags = h5f["fault_tags"][:]
-        available_fault_tags = set(fault_tags)
-
-    print("Available fault tags:", available_fault_tags)
-
-    # Step 2: Dictionary to hold unique segment indices per fault tag
+    """Count distinct (fault tag, segment indices) across all source files."""
     segments_per_tag = defaultdict(set)
-
-    # Step 3: Loop through files and gather segment indices
     for fname in source_files:
         with h5py.File(fname, "r") as h5f:
             fault_tags = h5f["fault_tags"][:]
-            segment_indices = h5f["segment_indices"][:]  # Assumes shape (N, M)
+            segment_indices = h5f["segment_indices"][:]
+            for tag, segment in zip(fault_tags, segment_indices):
+                segments_per_tag[int(tag)].add(tuple(segment))
 
-            for k in available_fault_tags:
-                ids = np.where(fault_tags == k)[0]  # 1D array of indices
-                segs = segment_indices[ids]  # shape (len(ids), M)
-
-                # Convert rows to tuples for hashability and store in set
-                for row in segs:
-                    segments_per_tag[k].add(tuple(row))
-
-    # Convert sets back to sorted lists of arrays (optional)
-    unique_segments_per_tag = {
-        k: np.array(sorted(list(v))) for k, v in segments_per_tag.items()
-    }
-    all_unique_segments = set()
-
-    for segments in unique_segments_per_tag.values():
-        for row in segments:
-            all_unique_segments.add(tuple(row))  # Convert row to tuple for set
-
-    total_unique_segments = len(all_unique_segments)
-    print("Total number of unique segment_indices:", total_unique_segments)
-
+    print("Available fault tags:", sorted(segments_per_tag))
+    total_unique_segments = sum(len(segments) for segments in segments_per_tag.values())
+    print("Total number of unique fault-tag/segment pairs:", total_unique_segments)
     return total_unique_segments
 
 

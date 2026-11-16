@@ -140,7 +140,7 @@ class FaultOutput:
         high sampling required!!!
         """
         print("computing moment rate function from SR time histories")
-        SRs = fo_SR.sx.ReadData("SRd")
+        SRs = fo_SR.sx.ReadData("SRs")
         SRd = fo_SR.sx.ReadData("SRd")
         same_connect = np.allclose(fo_SR.connect, self.connect)
         same_xyz = np.allclose(fo_SR.xyz, self.xyz)
@@ -208,8 +208,13 @@ class FaultOutput:
         # In fact, m0all can be smaller than mom:
         # For instance if 2 faces of similar orientation have opposite fault slip vector
         # mom will be 2*M0 and m0all will be zero
-        if m0all > 0:
-            corrected_moment_tensor = (mom / m0all) * moment_tensor
+        if m0all <= np.finfo(float).eps * abs(mom):
+            raise ValueError(
+                "The summed moment tensor cancels to zero while the scalar "
+                "moment is nonzero. Subdivide this source region to retain "
+                "the opposing mechanisms."
+            )
+        corrected_moment_tensor = (mom / m0all) * moment_tensor
 
         if use_geometric_center:
             xyzc = np.average(self.xyzc[ids, :], axis=0, weights=self.face_area[ids])

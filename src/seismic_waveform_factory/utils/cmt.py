@@ -4,6 +4,20 @@ import h5py
 import numpy as np
 
 
+def _slipping_coordinate_bounds(x1, fault_slip, slip_threshold):
+    selected = x1[fault_slip > slip_threshold]
+    if selected.size == 0:
+        raise ValueError(f"No fault elements exceed slip_threshold={slip_threshold}")
+    xmin = np.amin(selected)
+    xmax = np.amax(selected)
+    if xmin == xmax:
+        # Give constant coordinates a nonzero interval for half-open slices.
+        padding = max(1.0, abs(float(xmin))) * 1e-9
+        xmin = float(xmin) - padding
+        xmax = float(xmax) + padding
+    return xmin, xmax
+
+
 def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):
     """Compute a linearly spaces coordinate array (for latter slicing the fault output
     along vH and z)"""
@@ -14,9 +28,7 @@ def compute_slices_array_enforcing_dx(x1, fault_slip, dx, slip_threshold):
     if max_slip <= slip_threshold:
         print(f"fault slip is below slip_threshold ({slip_threshold:.2f} m) exiting...")
         sys.exit(0)
-    x1_slip = x1[fault_slip > slip_threshold]
-    x1min = np.amin(x1_slip)
-    x1max = np.amax(x1_slip)
+    x1min, x1max = _slipping_coordinate_bounds(x1, fault_slip, slip_threshold)
     dx1 = x1max - x1min
     nslices = int(dx1 // (dx * 1e3)) + 1
     myrange = np.linspace(0.0, 1.0001, (nslices + 1))
@@ -30,9 +42,7 @@ def compute_slices_array(x1, fault_slip, nslices, slip_threshold):
     max_slip = np.amax(fault_slip)
     if max_slip > 0 and slip_threshold / max_slip > 0.2:
         print("Warning: slip_threshold is a significant portion of the maximum slip")
-    x1_slip = x1[fault_slip > slip_threshold]
-    x1min = np.amin(x1_slip)
-    x1max = np.amax(x1_slip)
+    x1min, x1max = _slipping_coordinate_bounds(x1, fault_slip, slip_threshold)
     dx1 = x1max - x1min
     myrange = np.linspace(0.0, 1.0001, (nslices + 1))
     return np.array([x1min + v0 * dx1 for v0 in myrange])

@@ -125,9 +125,9 @@ def generate_synthetics(
                     dt * green_functions[0, ista, k, :], resampled_stf, "full"
                 )[0:nt]
 
-    if kind_vd in ["velocity", "accelaration"]:
+    if kind_vd in ["velocity", "acceleration"]:
         synth = np.gradient(synth, axis=-1) / dt
-    if kind_vd == "accelaration":
+    if kind_vd == "acceleration":
         synth = np.gradient(synth, axis=-1) / dt
 
     return dt, synth
