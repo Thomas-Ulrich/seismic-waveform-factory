@@ -4,6 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 
+import numpy as np
 from lxml.etree import XMLSyntaxError
 from obspy import UTCDateTime, read, read_inventory
 from obspy.clients.fdsn import Client, RoutingClient
@@ -289,6 +290,40 @@ def select_band_with_data(
     return None
 
 
+def find_saturated_channels(
+    stream, min_run=3, min_samples=5, min_excursion_fraction=0.1
+):
+    """Flag repeated flat extrema in raw counts (a conservative clipping heuristic).
+
+    Require at least min_samples samples at an extreme, including a consecutive
+    run of at least min_run samples. Gaps do not join runs. Constant traces and
+    extrema near the median are left to separate flatline/data-quality checks.
+    min_excursion_fraction is relative to the trace's peak-to-peak range.
+    """
+    if min_run < 2 or min_samples < min_run:
+        raise ValueError("Require min_samples >= min_run >= 2")
+    if not 0 < min_excursion_fraction <= 0.5:
+        raise ValueError("Require 0 < min_excursion_fraction <= 0.5")
+    saturated = set()
+    for trace in stream.copy().split():
+        data = np.asarray(trace.data, dtype=float)
+        finite = data[np.isfinite(data)]
+        if finite.size < min_samples or np.ptp(finite) == 0:
+            continue
+        median = np.median(finite)
+        for extreme in (finite.min(), finite.max()):
+            if abs(extreme - median) < min_excursion_fraction * np.ptp(finite):
+                continue
+            at_extreme = data == extreme
+            if np.count_nonzero(at_extreme) < min_samples:
+                continue
+            edges = np.flatnonzero(np.diff(np.r_[False, at_extreme, False]))
+            if np.any(edges[1::2] - edges[::2] >= min_run):
+                saturated.add(trace.id)
+                break
+    return sorted(saturated)
+
+
 def _retrieve_waveforms(
     network_station,
     client_name,
@@ -403,6 +438,13 @@ def _retrieve_waveforms(
 
             # Filter the stream for the selected band
             st_obs0 = st_obs0.select(channel=f"{selected_band}*")
+            saturated = find_saturated_channels(st_obs0)
+            if saturated:
+                print(
+                    f"Rejecting station {code}: suspected saturation in "
+                    + ", ".join(saturated)
+                )
+                continue
             if output_format == "sac":
                 # Save as SAC without response removal
                 write_sac_files(st_obs0, inventory, path_observations)
