@@ -181,8 +181,10 @@ def get_station_data(
         max_retries = 5
         for retry_count in range(max_retries):
             kargs = {}
-            base_url = getattr(client_or_clientname, "base_url", "")
-            if "geofon" not in base_url:
+            station_service = getattr(client_or_clientname, "services", {}).get(
+                "station", {}
+            )
+            if "includeavailability" in station_service:
                 kargs["includeavailability"] = True
             try:
                 if retry_count == 0:
